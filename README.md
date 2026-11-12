@@ -148,7 +148,7 @@ O aplicativo utiliza a interface gráfica Windows Presentation Foundation (WPF) 
    * Clique em **Ver Conversa (HTML / MD)**. O CIM converte o arquivo `.jsonl` da sessão em um documento HTML interativo e em um arquivo Markdown, abrindo o visualizador no navegador padrão.
 2. Para exportar projetos ou conversas para outro computador:
    * Selecione uma ou mais sessões na lista da esquerda.
-   * Marque a caixa **Incluir arquivos de código da pasta** caso deseje incluir os arquivos do repositório dentro do pacote (pastas de cache como `.git`, `node_modules`, `bin` e `obj` são filtradas automaticamente).
+   * Marque a caixa **Incluir arquivos de código da pasta** caso deseje incluir os arquivos do repositório dentro do pacote. Quando o diretório é um repositório Git, o CIM executa `git ls-files --cached --others --exclude-standard` para respeitar integralmente todas as regras do arquivo `.gitignore`. Em diretórios sem Git inicializado, o CIM interpreta diretamente as regras do arquivo `.gitignore` local e exclui diretórios de cache e compilação (`.git`, `node_modules`, `bin`, `obj`, `.vs`, `dist`, `build`, `__pycache__`, `.venv`, `.next`, `target` e `packages`).
    * Clique em **Exportar Pacote (.cimpack)** e escolha o local para salvar o arquivo.
 3. Para importar um arquivo `.cimpack` em outro computador ou instância:
    * Selecione a **Instância de Destino** na coluna da direita.
@@ -306,7 +306,7 @@ The application uses Windows Presentation Foundation (WPF) powered by the Window
    * Click **View Transcript (HTML / MD)**. CIM converts the session `.jsonl` transcript into a standalone Dark Mode HTML page and a Markdown file, and opens the HTML file in the default browser.
 2. To export projects or conversations for another computer:
    * Select one or more sessions in the source list.
-   * Enable **Include project workspace/code files** if you want to bundle the repository files inside the package (cache folders such as `.git`, `node_modules`, `bin`, and `obj` are excluded automatically).
+   * Enable **Include project workspace/code files** if you want to bundle the repository files inside the package. When the directory is a Git repository, CIM runs `git ls-files --cached --others --exclude-standard` to honor all `.gitignore` rules natively. For non-Git directories, CIM parses local `.gitignore` patterns directly and excludes build and dependency directories (`.git`, `node_modules`, `bin`, `obj`, `.vs`, `dist`, `build`, `__pycache__`, `.venv`, `.next`, `target`, and `packages`).
    * Click **Export Package (.cimpack)** and select the destination file path.
 3. To import a `.cimpack` file on another computer or instance:
    * Select the **Target Instance** in the right column.

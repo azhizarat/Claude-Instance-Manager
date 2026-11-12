@@ -351,28 +351,117 @@ function Export-ClaudeSessionReadableTranscript {
     }
 }
 
+function Convert-GitIgnorePatternToRegex([string]$Pattern) {
+    $p = $Pattern.Trim()
+    if ([string]::IsNullOrWhiteSpace($p) -or $p.StartsWith("#") -or $p.StartsWith("!")) { return $null }
+    $p = $p.Replace('\', '/').TrimStart('/')
+    $isDirOnly = $p.EndsWith("/")
+    $p = $p.TrimEnd('/')
+    if ([string]::IsNullOrWhiteSpace($p)) { return $null }
+
+    $escaped = [regex]::Escape($p)
+    $escaped = $escaped -replace '\\\*\\\*', '.*'
+    $escaped = $escaped -replace '\\\*', '[^/]*'
+    $escaped = $escaped -replace '\\\?', '[^/]'
+
+    if ($p.Contains("/")) {
+        return "^$escaped(/.*)?$"
+    } else {
+        return "(^|/)$escaped(/.*)?$"
+    }
+}
+
+function Get-GitIgnoreRegexList([string]$RootDir) {
+    $regexes = @()
+    $giFile = Join-Path $RootDir ".gitignore"
+    if (Test-Path $giFile) {
+        foreach ($line in [System.IO.File]::ReadAllLines($giFile)) {
+            $rx = Convert-GitIgnorePatternToRegex -Pattern $line
+            if ($rx) { $regexes += $rx }
+        }
+    }
+    return $regexes
+}
+
 function Copy-FilteredWorkspaceDirectory([string]$SourceDir, [string]$DestDir) {
     if (-not (Test-Path $SourceDir)) { return }
     if (-not (Test-Path $DestDir)) {
         New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
     }
 
+    # 1. If inside a Git worktree, use 'git ls-files --cached --others --exclude-standard' for 100% native .gitignore compliance
+    $usedGit = $false
+    try {
+        $isGit = & git -C $SourceDir rev-parse --is-inside-work-tree 2>$null
+        if ($LASTEXITCODE -eq 0 -and "$isGit".Trim() -eq "true") {
+            $relFiles = @(& git -C $SourceDir -c core.quotepath=false ls-files --cached --others --exclude-standard 2>$null)
+            if ($LASTEXITCODE -eq 0) {
+                $usedGit = $true
+                foreach ($rel in $relFiles) {
+                    if ([string]::IsNullOrWhiteSpace($rel)) { continue }
+                    $normRel = $rel.Replace('/', '\')
+                    $srcFile = Join-Path $SourceDir $normRel
+                    if (-not (Test-Path $srcFile -PathType Leaf)) { continue }
+                    $fInfo = Get-Item -LiteralPath $srcFile -Force -ErrorAction SilentlyContinue
+                    if (-not $fInfo -or $fInfo.Length -gt 52428800) { continue }
+
+                    $dstFile = Join-Path $DestDir $normRel
+                    $dstParent = Split-Path -Parent $dstFile
+                    if (-not (Test-Path $dstParent)) {
+                        New-Item -ItemType Directory -Path $dstParent -Force | Out-Null
+                    }
+                    Copy-Item -LiteralPath $srcFile -Destination $dstFile -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+    } catch {}
+
+    if ($usedGit) { return }
+
+    # 2. Fallback for non-Git directories: parse .gitignore rules + standard build/dependency exclusions
     $excludedDirs = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
-    foreach ($d in @(".git", "node_modules", "bin", "obj", ".vs", "dist", "build", "__pycache__", ".venv", "venv", ".next", "target", "packages")) {
+    foreach ($d in @(
+        ".git", "node_modules", "bin", "obj", ".vs", "dist", "build", "out",
+        "__pycache__", ".venv", "venv", ".next", ".nuxt", "target", "packages",
+        ".idea", ".terraform", "coverage", ".cache", ".turbo", ".pytest_cache"
+    )) {
         [void]$excludedDirs.Add($d)
     }
 
-    foreach ($item in Get-ChildItem -Path $SourceDir -Force -ErrorAction SilentlyContinue) {
-        if ($item.PSIsContainer) {
-            if ($excludedDirs.Contains($item.Name)) { continue }
-            Copy-FilteredWorkspaceDirectory -SourceDir $item.FullName -DestDir (Join-Path $DestDir $item.Name)
-        } else {
-            # Skip huge binary artifacts > 50 MB
-            if ($item.Length -le 52428800) {
-                Copy-Item -Path $item.FullName -Destination (Join-Path $DestDir $item.Name) -Force -ErrorAction SilentlyContinue
+    $ignoreRegexes = @(Get-GitIgnoreRegexList -RootDir $SourceDir)
+    $srcPrefixLen = $SourceDir.TrimEnd('\', '/').Length + 1
+
+    function Copy-RecursiveFallback([string]$CurrentSrc, [string]$CurrentDst) {
+        foreach ($item in Get-ChildItem -LiteralPath $CurrentSrc -Force -ErrorAction SilentlyContinue) {
+            $relPath = $item.FullName.Substring($srcPrefixLen).Replace('\', '/')
+            $matchedIgnore = $false
+            foreach ($rx in $ignoreRegexes) {
+                if ($relPath -match $rx) {
+                    $matchedIgnore = $true
+                    break
+                }
+            }
+            if ($matchedIgnore) { continue }
+
+            if ($item.PSIsContainer) {
+                if ($excludedDirs.Contains($item.Name)) { continue }
+                $nextDst = Join-Path $CurrentDst $item.Name
+                if (-not (Test-Path $nextDst)) {
+                    New-Item -ItemType Directory -Path $nextDst -Force | Out-Null
+                }
+                Copy-RecursiveFallback -CurrentSrc $item.FullName -CurrentDst $nextDst
+            } else {
+                if ($item.Length -le 52428800) {
+                    if (-not (Test-Path $CurrentDst)) {
+                        New-Item -ItemType Directory -Path $CurrentDst -Force | Out-Null
+                    }
+                    Copy-Item -LiteralPath $item.FullName -Destination (Join-Path $CurrentDst $item.Name) -Force -ErrorAction SilentlyContinue
+                }
             }
         }
     }
+
+    Copy-RecursiveFallback -CurrentSrc $SourceDir -CurrentDst $DestDir
 }
 
 function Export-ClaudePortablePack {

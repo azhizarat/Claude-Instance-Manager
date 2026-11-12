@@ -80,6 +80,29 @@ if (Test-Path $coreSessionsPath) {
             Remove-Item -Path $testPackFile -Force -ErrorAction SilentlyContinue
         }
     }
+
+    # Test .gitignore filtering in Copy-FilteredWorkspaceDirectory
+    $wsSrc = Join-Path $env:TEMP "cim_gitignore_src_$([guid]::NewGuid().ToString('N'))"
+    $wsDst = Join-Path $env:TEMP "cim_gitignore_dst_$([guid]::NewGuid().ToString('N'))"
+    try {
+        New-Item -ItemType Directory -Path (Join-Path $wsSrc "src") -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $wsSrc "custom_ignored_dir") -Force | Out-Null
+        "*.secret`ncustom_ignored_dir/`nignored_file.txt" | Set-Content -Path (Join-Path $wsSrc ".gitignore") -Encoding UTF8
+        "keep" | Set-Content -Path (Join-Path $wsSrc "src\main.ps1") -Encoding UTF8
+        "drop1" | Set-Content -Path (Join-Path $wsSrc "api.secret") -Encoding UTF8
+        "drop2" | Set-Content -Path (Join-Path $wsSrc "ignored_file.txt") -Encoding UTF8
+        "drop3" | Set-Content -Path (Join-Path $wsSrc "custom_ignored_dir\temp.dat") -Encoding UTF8
+
+        Copy-FilteredWorkspaceDirectory -SourceDir $wsSrc -DestDir $wsDst
+        $keptMain = Test-Path (Join-Path $wsDst "src\main.ps1")
+        $droppedSecret = -not (Test-Path (Join-Path $wsDst "api.secret"))
+        $droppedTxt = -not (Test-Path (Join-Path $wsDst "ignored_file.txt"))
+        $droppedDir = -not (Test-Path (Join-Path $wsDst "custom_ignored_dir"))
+        Assert-True ($keptMain -and $droppedSecret -and $droppedTxt -and $droppedDir) "Task 2: Copy-FilteredWorkspaceDirectory respects .gitignore rules"
+    } finally {
+        Remove-Item -Path $wsSrc -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $wsDst -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # --- Task 3: Core-ProtocolRouter.ps1 ---
