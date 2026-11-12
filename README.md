@@ -57,6 +57,19 @@ O aplicativo utiliza a interface gráfica Windows Presentation Foundation (WPF) 
   * `side-session-notes`
   * `vm_bundles\claudevm.bundle\sessiondata.vhdx`
 
+#### 2.2. Estrutura Interna do Pacote Portátil (`.cimpack`)
+
+| Caminho no Arquivo `.cimpack` | Conteúdo Técnico |
+| :--- | :--- |
+| `cim-manifest.json` | Manifesto de metadados contendo máquina de origem, lista de projetos, caminhos `originalCwd` e identificadores de sessão. |
+| `sessions\<Kind>\local_<uuid>.json` | Arquivos de definição de sessão do Claude Code (`Code`) e Cowork (`Cowork`). |
+| `side-session-notes\local_<uuid>\` | Notas laterais e anexos vinculados à sessão. |
+| `claude-global\projects\<encoded-cwd>\` | Histórico completo `.jsonl`, diretório `<cliSessionId>\` (`subagents`, `tool-results`, `custom-title.json`) e diretório `memory\` (`MEMORY.md`). |
+| `claude-global\file-history\<cliSessionId>\` | Snapshots de arquivos modificados durante a sessão. |
+| `claude-global\session-env\<cliSessionId>\` | Estado de variáveis e ambiente da sessão. |
+| `transcripts-readable\*.html` e `*.md` | Transcrições completas da conversa formatadas em HTML Dark Mode autocontido e em Markdown. |
+| `workspace-files\<encoded-cwd>\` | Arquivos de código do repositório (incluídos opcionalmente quando solicitado na exportação). |
+
 ---
 
 ### 3. Requisitos do Sistema
@@ -151,7 +164,7 @@ O aplicativo utiliza a interface gráfica Windows Presentation Foundation (WPF) 
 3. Clique em **Ativar / Salvar Roteador claude://**.
 4. Para remover a interceptação e restaurar o comportamento original do Windows, clique em **Restaurar Padrão do Windows**.
 
-#### 5.6. Controlar Atualizações Automáticas e Modo Dispatch
+#### 5.7. Controlar Atualizações Automáticas e Modo Dispatch
 1. Selecione a aba **Atualizações, Proteções e Backups**.
 2. Selecione a opção **Baixar atualizações em segundo plano, sem reiniciar automaticamente (Recomendado)**.
 3. Clique em **Aplicar Política de Atualização e Forçar Modo 1p**.
@@ -203,6 +216,19 @@ The application uses Windows Presentation Foundation (WPF) powered by the Window
 | **Generated Icons** | `%LOCALAPPDATA%\Claude-Instances\icons\` | Stores multi-resolution `.ico` files (256px, 48px, 32px, 16px) with custom badges. |
 | **System Backups** | `%LOCALAPPDATA%\Claude-Instances\Backups\` | Stores `.zip` archives of sessions, side notes, and instance configurations. |
 | **Global CLI Transcripts** | `%USERPROFILE%\.claude\projects\` | Stores global JSONL conversation transcripts shared by the Claude Code engine. |
+
+#### 2.1. Portable Package (`.cimpack`) Internal Structure
+
+| Archive Path | Technical Contents |
+| :--- | :--- |
+| `cim-manifest.json` | Package manifest containing source host, project list, `originalCwd` paths, and session descriptors. |
+| `sessions\<Kind>\local_<uuid>.json` | Desktop session metadata files for Claude Code (`Code`) and Cowork (`Cowork`). |
+| `side-session-notes\local_<uuid>\` | Side notes and attachments associated with the session. |
+| `claude-global\projects\<encoded-cwd>\` | Complete `.jsonl` transcript, `<cliSessionId>\` subdirectory (`subagents`, `tool-results`, `custom-title.json`), and `memory\` (`MEMORY.md`). |
+| `claude-global\file-history\<cliSessionId>\` | File modification snapshots recorded during the session. |
+| `claude-global\session-env\<cliSessionId>\` | Session environment metadata. |
+| `transcripts-readable\*.html` and `*.md` | Standalone Dark Mode HTML viewer and Markdown conversation transcripts. |
+| `workspace-files\<encoded-cwd>\` | Optional project workspace source files (when enabled during export). |
 
 ---
 
@@ -296,7 +322,7 @@ The application uses Windows Presentation Foundation (WPF) powered by the Window
 3. Click **Enable / Save claude:// Router**.
 4. To restore the default Windows protocol handler, click **Restore Windows Default**.
 
-#### 5.6. Configure Auto-Update Policy and Dispatch Mode
+#### 5.7. Configure Auto-Update Policy and Dispatch Mode
 1. Select the **Updates, Protections, and Backups** tab.
 2. Select **Download updates in background, do NOT auto-restart (Recommended)**.
 3. Click **Apply Update Policy and Enforce 1p Mode**.
