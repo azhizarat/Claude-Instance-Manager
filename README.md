@@ -22,6 +22,8 @@ O aplicativo utiliza a interface gráfica Windows Presentation Foundation (WPF) 
 4. **Erro de Escrita Atômica (`EMLINK` / `nlink > 1`):** O Claude Desktop rejeita arquivos de configuração (`claude_desktop_config.json`, `config.json`, `bridge-state.json`) que possuam mais de um vínculo físico no sistema de arquivos NTFS. O CIM verifica a contagem de links físicos e desvincula automaticamente esses arquivos antes de qualquer leitura ou gravação.
 5. **Redirecionamento Incorreto do Protocolo `claude://` (OAuth Login):** Durante a autenticação no navegador web, o sistema operacional envia o callback `claude://` sempre para a instância primária. O CIM intercepta o protocolo `claude://` através da chave dinâmica `ProgID` (`Shlwapi.dll!AssocQueryString`) e direciona o token de autenticação para a instância selecionada pelo usuário.
 6. **Reinicialização Forçada por Atualização Automática:** O atualizador padrão encerra todas as instâncias abertas para aplicar novas versões. O CIM configura o perfil local (`Claude-3p\configLibrary`) para permitir o download da atualização em segundo plano sem reiniciar o aplicativo automaticamente, mantendo o modo de operação `1p` ativo para evitar o bloqueio da tela corporativa Gateway (`3p`).
+7. **Transferência Portátil de Projetos entre Computadores (`.cimpack`):** O histórico completo de uma sessão do Claude Code é distribuído entre a pasta da instância local e o diretório global `%USERPROFILE%\.claude\projects\`. O CIM empacota todos os artefatos da sessão, subagentes, memórias (`MEMORY.md`), histórico de edições de arquivos, código-fonte opcional e transcrições legíveis em HTML/Markdown em um único arquivo `.cimpack`. Na importação em outro computador, o CIM permite remapear o caminho do diretório do repositório local e reescreve automaticamente as referências internas.
+8. **Motor de Alto Desempenho Pré-Compilado (`CIMNative.v4.dll`):** O CIM compila uma biblioteca nativa em C# que lê metadados de centenas de arquivos de sessão em milissegundos (ignorando blocos extensos de schemas MCP), consulta linhas de comando de processos diretamente via memória PEB do Windows (`NtQueryInformationProcess`) sem sobrecarga de consultas WMI e valida carimbos de sincronização (`.cim-sync-stamp`) antes de percorrer árvores de hardlinks.
 
 ---
 
@@ -118,17 +120,30 @@ O aplicativo utiliza a interface gráfica Windows Presentation Foundation (WPF) 
 5. Conclua o login no navegador web. O redirecionamento `claude://` entregará o token diretamente para a instância selecionada.
 6. Caso você tenha autenticado uma conta diferente da anterior na mesma instância, clique em **Vincular Sessões à Conta** no cartão da instância para mover as sessões locais existentes para o novo par `AccountUUID` / `OrgUUID`.
 
-#### 5.4. Copiar ou Mover Projetos e Sessões entre Contas
-1. Selecione a aba **Projetos e Sessões (Mover / Copiar)**.
+#### 5.4. Copiar ou Mover Projetos e Sessões entre Contas (Mesma Máquina)
+1. Selecione a aba **Projetos, Sessões e Pacotes (.cimpack)**.
 2. Na coluna **1. Instância de Origem**, selecione a instância que contém os projetos desejados.
 3. Na coluna **2. Instância de Destino**, selecione a instância que receberá os projetos.
-4. Utilize o campo de filtro para localizar o projeto pelo nome da pasta ou pelo título da sessão.
+4. Utilize o campo de filtro para localizar o projeto pelo nome da pasta ou pelo título da sessão (a filtragem opera em memória em tempo real).
 5. Selecione uma ou mais sessões na lista da esquerda.
 6. Marque a opção **Incluir sub-sessões filhas** para transferir automaticamente sessões derivadas.
 7. Clique em **Copiar / Clonar ->** para manter os arquivos na origem e criar uma cópia no destino, ou clique em **Mover Selecionados ->** para transferir definitivamente.
-   * *Resultado:* O CIM transfere os metadados `.json`, copia o diretório correspondente em `side-session-notes`, adiciona a permissão `bypassPermissions` para o diretório do repositório na instância de destino e ativa o agrupamento por pasta (`groupBy: folder`).
 
-#### 5.5. Configurar o Roteador de Protocolo `claude://`
+#### 5.5. Exportar e Importar Pacotes Portáteis entre Computadores (`.cimpack`) e Visualizar Histórico HTML/Markdown
+1. Para visualizar o histórico completo de uma conversa no navegador web:
+   * Selecione uma sessão na lista da esquerda na aba **Projetos, Sessões e Pacotes (.cimpack)**.
+   * Clique em **Ver Conversa (HTML / MD)**. O CIM converte o arquivo `.jsonl` da sessão em um documento HTML interativo e em um arquivo Markdown, abrindo o visualizador no navegador padrão.
+2. Para exportar projetos ou conversas para outro computador:
+   * Selecione uma ou mais sessões na lista da esquerda.
+   * Marque a caixa **Incluir arquivos de código da pasta** caso deseje incluir os arquivos do repositório dentro do pacote (pastas de cache como `.git`, `node_modules`, `bin` e `obj` são filtradas automaticamente).
+   * Clique em **Exportar Pacote (.cimpack)** e escolha o local para salvar o arquivo.
+3. Para importar um arquivo `.cimpack` em outro computador ou instância:
+   * Selecione a **Instância de Destino** na coluna da direita.
+   * Clique em **Importar Pacote (.cimpack)** e selecione o arquivo `.cimpack`.
+   * Para cada projeto contido no pacote, o CIM exibe o caminho original da pasta e pergunta se você deseja selecionar o diretório equivalente no computador atual.
+   * Caso selecione um novo diretório local, o CIM reescreve automaticamente as propriedades `cwd` na sessão e no histórico `.jsonl`, instala os arquivos em `%USERPROFILE%\.claude\projects\<caminho-codificado>` e autoriza a nova pasta com `bypassPermissions`.
+
+#### 5.6. Configurar o Roteador de Protocolo `claude://`
 1. Selecione a aba **Roteador claude:// e Sincronização**.
 2. Escolha o modo de operação:
    * **Exibir janela seletora para escolher a instância de destino (Recomendado):** Abre uma janela flutuante sempre que um link `claude://` é acionado fora do fluxo automático de login.
@@ -173,6 +188,8 @@ The application uses Windows Presentation Foundation (WPF) powered by the Window
 4. **Atomic Write Failure (`EMLINK` / `nlink > 1`):** Claude Desktop refuses to write to configuration files (`claude_desktop_config.json`, `config.json`, `bridge-state.json`) when their NTFS link count exceeds 1. CIM inspects the link count and detaches hardlinked configuration files into standalone files prior to modification.
 5. **Misrouted `claude://` Deep Links (OAuth Login):** Browser OAuth callbacks (`claude://`) are routed by Windows to the primary MSIX instance by default. CIM intercepts the `claude://` protocol via the dynamic AppX `ProgID` (`Shlwapi.dll!AssocQueryString`) and dispatches the callback URI directly to the target instance.
 6. **Forced Auto-Update Restarts:** The default updater terminates all running instances to apply updates. CIM configures the local managed profile (`Claude-3p\configLibrary`) to allow background update downloads without automatic restarts, while enforcing `deploymentMode: "1p"` to prevent accidental corporate Gateway (`3p`) lockouts.
+7. **Cross-Machine Portable Project Transfer (`.cimpack`):** Claude Code distributes session state across the instance directory and `%USERPROFILE%\.claude\projects\`. CIM bundles session metadata, CLI JSONL transcripts, subagent logs, project memories (`MEMORY.md`), file-history snapshots, readable HTML/Markdown transcripts, and optional workspace source files into a single `.cimpack` archive. Upon import on another machine, CIM prompts for local folder remapping and rewrites internal path references automatically.
+8. **Precompiled High-Performance Native Engine (`CIMNative.v4.dll`):** CIM compiles a native C# acceleration assembly that scans hundreds of session metadata files in milliseconds (skipping embedded MCP schema payloads), reads process command lines directly from Windows PEB memory (`NtQueryInformationProcess`) without WMI overhead, and checks synchronization stamps (`.cim-sync-stamp`) before walking NTFS hardlink trees.
 
 ---
 
@@ -250,15 +267,28 @@ The application uses Windows Presentation Foundation (WPF) powered by the Window
 5. Complete the OAuth login in your web browser. The `claude://` callback routes directly to the target instance.
 6. If you authenticated a new account on an existing instance, click **Bind Sessions to Account** on the instance card to migrate local sessions to the new `AccountUUID` / `OrgUUID` pair.
 
-#### 5.4. Copy or Move Projects and Sessions Across Accounts
-1. Select the **Projects and Sessions (Move / Copy)** tab.
+#### 5.4. Copy or Move Projects and Sessions Across Accounts (Same Machine)
+1. Select the **Projects, Sessions, and Packages (.cimpack)** tab.
 2. Select the **Source Instance** in the left column and the **Target Instance** in the right column.
 3. Select one or more sessions from the source list.
 4. Enable **Include child sub-sessions** to include linked sub-sessions automatically.
 5. Click **Copy / Clone ->** to duplicate the sessions into the target instance, or click **Move Selected ->** to move them.
-   * *Result:* CIM transfers the `.json` session files, copies matching `side-session-notes` directories, authorizes the project repository path (`bypassPermissions`) in the target instance, and enables folder grouping (`groupBy: folder`).
 
-#### 5.5. Configure the `claude://` Protocol Router
+#### 5.5. Export and Import Cross-Machine Portable Packages (`.cimpack`) and View HTML/Markdown Transcripts
+1. To view a complete conversation transcript in a web browser:
+   * Select a session in the left list on the **Projects, Sessions, and Packages (.cimpack)** tab.
+   * Click **View Transcript (HTML / MD)**. CIM converts the session `.jsonl` transcript into a standalone Dark Mode HTML page and a Markdown file, and opens the HTML file in the default browser.
+2. To export projects or conversations for another computer:
+   * Select one or more sessions in the source list.
+   * Enable **Include project workspace/code files** if you want to bundle the repository files inside the package (cache folders such as `.git`, `node_modules`, `bin`, and `obj` are excluded automatically).
+   * Click **Export Package (.cimpack)** and select the destination file path.
+3. To import a `.cimpack` file on another computer or instance:
+   * Select the **Target Instance** in the right column.
+   * Click **Import Package (.cimpack)** and select the `.cimpack` file.
+   * For each project in the package, CIM displays the original directory path and asks whether you want to map it to a different local directory on the current computer.
+   * CIM rewrites all internal `cwd` path references, installs the transcripts and memories under `%USERPROFILE%\.claude\projects\<encoded-path>`, and grants `bypassPermissions` on the mapped folder.
+
+#### 5.6. Configure the `claude://` Protocol Router
 1. Select the **claude:// Router and Config Sync** tab.
 2. Select the routing mode:
    * **Display instance selector popup when claude:// is clicked (Recommended):** Opens a topmost selector window whenever a `claude://` link is invoked.

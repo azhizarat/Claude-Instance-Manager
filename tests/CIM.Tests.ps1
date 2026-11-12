@@ -15,9 +15,9 @@ function Assert-True([bool]$Condition, [string]$Message) {
     }
 }
 
-Write-Host "=== Running CIM Automated Tests ===" -ForegroundColor Cyan
+Write-Host "=== Running CIM Automated Tests (v1.1.0) ===" -ForegroundColor Cyan
 
-# --- Task 1: Core-Instances.ps1 ---
+# --- Task 1: Core-Instances.ps1 & Native Engine ---
 $coreInstancesPath = Join-Path $SrcDir "Core-Instances.ps1"
 Assert-True (Test-Path $coreInstancesPath) "Task 1: src/Core-Instances.ps1 exists"
 if (Test-Path $coreInstancesPath) {
@@ -29,12 +29,13 @@ if (Test-Path $coreInstancesPath) {
     $exePath = Get-ClaudeExePath
     Assert-True (-not [string]::IsNullOrWhiteSpace($exePath)) "Task 1: Get-ClaudeExePath resolves executable ($exePath)"
 
+    $swInst = [System.Diagnostics.Stopwatch]::StartNew()
     $instances = @(Get-ClaudeInstances)
-    Assert-True ($instances.Count -ge 1) "Task 1: Get-ClaudeInstances discovers instances (found $($instances.Count))"
+    $swInst.Stop()
+    Assert-True ($instances.Count -ge 1) "Task 1: Get-ClaudeInstances discovers instances ($($instances.Count) in $($swInst.ElapsedMilliseconds) ms)"
     $primaryInst = $instances | Where-Object { $_.IsPrimary } | Select-Object -First 1
     Assert-True ($null -ne $primaryInst) "Task 1: Primary instance identified ($($primaryInst.DisplayName))"
 
-    # Test Ensure-UniqueConfigFile breaks hardlinks on config files
     $tempDir = Join-Path $env:TEMP "cim_test_$([guid]::NewGuid().ToString('N'))"
     New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
     try {
@@ -56,12 +57,29 @@ if (Test-Path $coreInstancesPath) {
     }
 }
 
-# --- Task 2: Core-Sessions.ps1 ---
+# --- Task 2: Core-Sessions.ps1 (Fast C# Scanner + Portable .cimpack Export/Import) ---
 $coreSessionsPath = Join-Path $SrcDir "Core-Sessions.ps1"
 if (Test-Path $coreSessionsPath) {
     . $coreSessionsPath
-    $primarySessions = @(Get-ClaudeInstanceSessions -InstanceId "Primary")
-    Assert-True ($null -ne $primarySessions) "Task 2: Get-ClaudeInstanceSessions executes cleanly (found $($primarySessions.Count) in Primary)"
+    $swSess = [System.Diagnostics.Stopwatch]::StartNew()
+    $primarySessions = @(Get-ClaudeInstanceSessions -InstanceId "Primary" -ForceRefresh)
+    $swSess.Stop()
+    Assert-True ($null -ne $primarySessions) "Task 2: FastSessionScanner scanned $($primarySessions.Count) sessions in $($swSess.ElapsedMilliseconds) ms"
+    Assert-True ($swSess.ElapsedMilliseconds -lt 1000) "Task 2: FastSessionScanner completed under 1000 ms ($($swSess.ElapsedMilliseconds) ms)"
+
+    if ($primarySessions.Count -gt 0) {
+        $testPackFile = Join-Path $env:TEMP "cim_test_pack_$([guid]::NewGuid().ToString('N')).cimpack"
+        try {
+            $sampleSid = $primarySessions[0].SessionId
+            $expRes = Export-ClaudePortablePack -SourceInstanceId "Primary" -SessionIds @($sampleSid) -OutputFilePath $testPackFile -IncludeWorkspaceFiles $false -IncludeSubSessions $false
+            Assert-True ((Test-Path $testPackFile) -and $expRes.SessionCount -ge 1) "Task 2: Export-ClaudePortablePack creates valid .cimpack archive"
+
+            $manifest = Read-ClaudePortablePack -PackPath $testPackFile
+            Assert-True ($manifest.schemaVersion -eq 1 -and $manifest.sessions.Count -ge 1) "Task 2: Read-ClaudePortablePack parses cim-manifest.json"
+        } finally {
+            Remove-Item -Path $testPackFile -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 # --- Task 3: Core-ProtocolRouter.ps1 ---

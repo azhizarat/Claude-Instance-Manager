@@ -1,26 +1,6 @@
 ﻿# Core-ProtocolRouter.ps1 — claude:// Protocol Interceptor & Dispatcher
 
-if (-not ("CIMNative.Assoc" -as [type])) {
-    Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-
-namespace CIMNative {
-    public static class Assoc {
-        [DllImport("Shlwapi.dll", CharSet = CharSet.Unicode)]
-        public static extern uint AssocQueryString(uint flags, uint str, string pszAssoc, string pszExtra, StringBuilder pszOut, ref uint pcchOut);
-
-        public static string Query(uint strType, string protocol) {
-            uint len = 1024;
-            var sb = new StringBuilder((int)len);
-            AssocQueryString(0, strType, protocol, "open", sb, ref len);
-            return sb.ToString();
-        }
-    }
-}
-"@
-}
+Initialize-CIMNativeEngine
 
 $script:ProtocolVbsPath = Join-Path $PSScriptRoot "Launch-ProtocolPopup.vbs"
 $script:DefaultDelegateExecute = "{A56A841F-E974-45C1-8001-7E3F8A085917}"

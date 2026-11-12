@@ -17,13 +17,14 @@ using System.IO;
 using System.Reflection;
 
 [assembly: AssemblyTitle("Claude Instance Manager")]
-[assembly: AssemblyDescription("Multi-Instance Manager, Session Migrator, and claude:// Router for Claude Desktop on Windows")]
+[assembly: AssemblyDescription("Multi-Instance Manager, Portable Pack (.cimpack) Migrator, and claude:// Router for Claude Desktop on Windows")]
 [assembly: AssemblyProduct("Claude Instance Manager (CIM)")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 namespace ClaudeInstanceManager {
     public static class Program {
+        private const string BuildVersion = "1.1.0.0";
         private static readonly string[,] EmbeddedFiles = new string[,] {
             { "Claude-Instance-Manager.ps1", "Claude-Instance-Manager.ps1" },
             { "Launch-CIM.vbs",              "Launch-CIM.vbs" },
@@ -85,6 +86,12 @@ namespace ClaudeInstanceManager {
         }
 
         private static void ExtractEmbeddedFiles(string targetRoot) {
+            string stampPath = Path.Combine(targetRoot, ".cim-version");
+            if (File.Exists(stampPath) && File.Exists(Path.Combine(targetRoot, "Claude-Instance-Manager.ps1"))) {
+                try {
+                    if (File.ReadAllText(stampPath).Trim() == BuildVersion) return;
+                } catch {}
+            }
             var asm = Assembly.GetExecutingAssembly();
             for (int i = 0; i < EmbeddedFiles.GetLength(0); i++) {
                 string resName = EmbeddedFiles[i, 0];
@@ -101,6 +108,7 @@ namespace ClaudeInstanceManager {
                     }
                 }
             }
+            try { File.WriteAllText(stampPath, BuildVersion); } catch {}
         }
     }
 }
@@ -153,7 +161,7 @@ if (Test-Path (Join-Path $ProjectRoot "README.md")) {
 }
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$ZipOut = Join-Path $DistDir "Claude-Instance-Manager-v1.0.0-Portable.zip"
+$ZipOut = Join-Path $DistDir "Claude-Instance-Manager-v1.1.0-Portable.zip"
 if (Test-Path $ZipOut) { Remove-Item -Path $ZipOut -Force }
 [System.IO.Compression.ZipFile]::CreateFromDirectory($StageZipDir, $ZipOut)
 Remove-Item -Path $StageZipDir -Recurse -Force

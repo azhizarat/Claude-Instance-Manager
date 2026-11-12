@@ -17,10 +17,10 @@ $SrcDir = Join-Path $PSScriptRoot "src"
 
 $script:I18N = @{
     "pt-BR" = @{
-        Subtitle              = "Gerenciador Multi-Instância, Migração de Projetos, Roteador claude:// e Controle de Atualizações"
+        Subtitle              = "Gerenciador Multi-Instância, Migração Portátil (.cimpack), Roteador claude:// e Controle de Updates"
         BtnRefreshAll         = "Atualizar Tudo"
         TabInstances          = "Instâncias e Contas"
-        TabSessions           = "Projetos e Sessões (Mover / Copiar)"
+        TabSessions           = "Projetos, Sessões e Pacotes (.cimpack)"
         TabProtocol           = "Roteador claude:// e Sincronização"
         TabSettings           = "Atualizações, Proteções e Backups"
         LblInstalledInstances = "Instâncias Instaladas"
@@ -55,13 +55,18 @@ $script:I18N = @{
         LblFilter             = "Filtrar por Projeto ou Título:"
         BtnSelectAll          = "Selecionar Visíveis"
         BtnClearSel           = "Limpar Seleção"
-        LblTransferHeader     = "Operação de Transferência"
+        BtnViewTranscript     = "Ver Conversa (HTML / MD)"
+        LblTransferHeader     = "Migração Local (Mesma Máquina)"
         ChkIncludeSub         = "Incluir sub-sessões filhas"
         ChkAutoBackup         = "Criar backup antes de mover"
         BtnCopySessions       = "Copiar / Clonar ->"
         BtnMoveSessions       = "Mover Selecionados ->"
-        TxtTransferNote       = "Autoriza automaticamente a pasta do repositório (bypassPermissions) e ativa o agrupamento por pasta no destino."
-        LblDstInstance        = "2. Instância de Destino"
+        LblPortableHeader     = "Pacote Portátil (Entre Máquinas)"
+        ChkPackWorkspace      = "Incluir arquivos de código da pasta"
+        BtnExportPack         = "Exportar Pacote (.cimpack)"
+        BtnImportPack         = "Importar Pacote (.cimpack)"
+        TxtTransferNote       = "O pacote .cimpack inclui histórico completo do Code (.jsonl), subagents, memórias, notas e versão HTML/Markdown legível."
+        LblDstInstance        = "2. Instância de Destino (Local ou Importação)"
         LblDstSummary         = "Sessões na instância de destino"
         LblProtoTitle         = "Interceptador e Roteador do Protocolo claude://"
         LblProtoDesc          = "Quando o navegador executa a autenticação OAuth ou ativa um conector, o sistema operacional aciona uma URI claude://. Com o interceptador ativo, o CIM direciona o link para a instância desejada."
@@ -106,10 +111,10 @@ $script:I18N = @{
         MsgReady              = "Pronto."
     }
     "en-US" = @{
-        Subtitle              = "Multi-Instance Manager, Project Migration, claude:// Protocol Router, and Update Controller"
+        Subtitle              = "Multi-Instance Manager, Portable Pack (.cimpack), claude:// Router, and Update Controller"
         BtnRefreshAll         = "Refresh All"
         TabInstances          = "Instances and Accounts"
-        TabSessions           = "Projects and Sessions (Move / Copy)"
+        TabSessions           = "Projects, Sessions, and Packages (.cimpack)"
         TabProtocol           = "claude:// Router and Config Sync"
         TabSettings           = "Updates, Protections, and Backups"
         LblInstalledInstances = "Installed Instances"
@@ -144,13 +149,18 @@ $script:I18N = @{
         LblFilter             = "Filter by Project or Title:"
         BtnSelectAll          = "Select Visible"
         BtnClearSel           = "Clear Selection"
-        LblTransferHeader     = "Transfer Operation"
+        BtnViewTranscript     = "View Transcript (HTML / MD)"
+        LblTransferHeader     = "Local Migration (Same Machine)"
         ChkIncludeSub         = "Include child sub-sessions"
         ChkAutoBackup         = "Create backup before moving"
         BtnCopySessions       = "Copy / Clone ->"
         BtnMoveSessions       = "Move Selected ->"
-        TxtTransferNote       = "Automatically grants repository folder permission (bypassPermissions) and enables folder grouping in the target instance."
-        LblDstInstance        = "2. Target Instance"
+        LblPortableHeader     = "Portable Package (Cross-Machine)"
+        ChkPackWorkspace      = "Include project workspace/code files"
+        BtnExportPack         = "Export Package (.cimpack)"
+        BtnImportPack         = "Import Package (.cimpack)"
+        TxtTransferNote       = "A .cimpack archive bundles full Code transcripts (.jsonl), subagents, memories, notes, and readable HTML/Markdown files."
+        LblDstInstance        = "2. Target Instance (Local or Import)"
         LblDstSummary         = "Sessions in target instance"
         LblProtoTitle         = "claude:// Protocol Interceptor and Router"
         LblProtoDesc          = "When the browser completes OAuth login or connector authentication, Windows invokes a claude:// URI. When active, CIM routes the URI to the selected instance."
@@ -210,7 +220,7 @@ function T([string]$Key) {
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Claude Instance Manager (CIM)"
-        Width="1140" Height="770" MinWidth="980" MinHeight="640"
+        Width="1180" Height="790" MinWidth="1000" MinHeight="660"
         WindowStartupLocation="CenterScreen"
         Background="#0F0F12" Foreground="#F4F4F5"
         FontFamily="Segoe UI">
@@ -308,7 +318,7 @@ function T([string]$Key) {
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-                    <ComboBox x:Name="CmbLanguage" Width="110" Height="30" Margin="0,0,10,0" VerticalContentAlignment="Center">
+                    <ComboBox x:Name="CmbLanguage" Width="120" Height="30" Margin="0,0,10,0" VerticalContentAlignment="Center">
                         <ComboBoxItem Content="Português (BR)" Tag="pt-BR"/>
                         <ComboBoxItem Content="English (US)" Tag="en-US"/>
                     </ComboBox>
@@ -331,7 +341,6 @@ function T([string]$Key) {
                         <ColumnDefinition Width="1*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Left: Instances ScrollViewer -->
                     <DockPanel Grid.Column="0" Margin="0,0,14,0">
                         <DockPanel DockPanel.Dock="Top" LastChildFill="False" Margin="0,0,0,10">
                             <TextBlock x:Name="LblInstalledInstances" Text="" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" DockPanel.Dock="Left"/>
@@ -342,7 +351,6 @@ function T([string]$Key) {
                         </ScrollViewer>
                     </DockPanel>
 
-                    <!-- Right: Create / Edit Instance Form -->
                     <Border Grid.Column="1" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="10" Padding="16">
                         <StackPanel>
                             <TextBlock x:Name="TxtFormTitle" Text="" FontSize="15" FontWeight="Bold" Margin="0,0,0,12"/>
@@ -391,12 +399,12 @@ function T([string]$Key) {
                 </Grid>
             </TabItem>
 
-            <!-- TAB 2: PROJECTS & CHATS MIGRATION -->
+            <!-- TAB 2: PROJECTS, SESSIONS & PORTABLE PACK (.cimpack) -->
             <TabItem x:Name="TabSessions" Header="Sessions">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="1.2*"/>
-                        <ColumnDefinition Width="220"/>
+                        <ColumnDefinition Width="260"/>
                         <ColumnDefinition Width="1*"/>
                     </Grid.ColumnDefinitions>
 
@@ -405,14 +413,15 @@ function T([string]$Key) {
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                                 <TextBlock x:Name="LblSrcInstance" Text="" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
-                                <ComboBox x:Name="CmbSourceInstance" Height="32" Margin="0,0,0,8"/>
+                                <ComboBox x:Name="CmbSourceInstance" Height="30" Margin="0,0,0,8"/>
                                 <DockPanel>
                                     <TextBlock x:Name="LblFilter" Text="" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                     <TextBox x:Name="TxtSessionFilter" />
                                 </DockPanel>
                                 <WrapPanel Margin="0,8,0,0">
-                                    <Button x:Name="BtnSelectAllSessions" Content="" Padding="8,4" Margin="0,0,6,0" FontSize="11"/>
-                                    <Button x:Name="BtnClearSessionSelection" Content="" Padding="8,4" FontSize="11"/>
+                                    <Button x:Name="BtnSelectAllSessions" Content="" Padding="8,4" Margin="0,0,6,4" FontSize="11"/>
+                                    <Button x:Name="BtnClearSessionSelection" Content="" Padding="8,4" Margin="0,0,6,4" FontSize="11"/>
+                                    <Button x:Name="BtnViewTranscript" Content="" Background="#065F46" BorderBrush="#059669" Foreground="White" Padding="8,4" Margin="0,0,0,4" FontSize="11"/>
                                 </WrapPanel>
                             </StackPanel>
 
@@ -420,28 +429,40 @@ function T([string]$Key) {
                         </DockPanel>
                     </Border>
 
-                    <!-- Center Transfer Controls -->
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0">
-                        <Border Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="10" Padding="12">
-                            <StackPanel>
-                                <TextBlock x:Name="LblTransferHeader" Text="" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                                <CheckBox x:Name="ChkIncludeSubSessions" Content="" IsChecked="True" FontSize="11"/>
-                                <CheckBox x:Name="ChkAutoBackupMove" Content="" IsChecked="True" FontSize="11" Margin="0,4,0,12"/>
+                    <!-- Center Transfer & Portable Pack Controls -->
+                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Margin="12,0">
+                        <StackPanel VerticalAlignment="Center">
+                            <Border Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock x:Name="LblTransferHeader" Text="" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                    <CheckBox x:Name="ChkIncludeSubSessions" Content="" IsChecked="True" FontSize="11"/>
+                                    <CheckBox x:Name="ChkAutoBackupMove" Content="" IsChecked="True" FontSize="11" Margin="0,4,0,10"/>
 
-                                <Button x:Name="BtnCopySessions" Content="" Background="#2563EB" BorderBrush="#2563EB" Foreground="White" Padding="10,9" Margin="0,0,0,10"/>
-                                <Button x:Name="BtnMoveSessions" Content="" Background="#D97757" BorderBrush="#D97757" Foreground="White" Padding="10,9"/>
+                                    <Button x:Name="BtnCopySessions" Content="" Background="#2563EB" BorderBrush="#2563EB" Foreground="White" Padding="10,8" Margin="0,0,0,8"/>
+                                    <Button x:Name="BtnMoveSessions" Content="" Background="#D97757" BorderBrush="#D97757" Foreground="White" Padding="10,8"/>
+                                </StackPanel>
+                            </Border>
 
-                                <TextBlock x:Name="TxtTransferNote" TextWrapping="Wrap" Foreground="#A1A1AA" FontSize="11" Margin="0,12,0,0" Text=""/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
+                            <Border Background="#18181B" BorderBrush="#3F3F46" BorderThickness="1" CornerRadius="10" Padding="12">
+                                <StackPanel>
+                                    <TextBlock x:Name="LblPortableHeader" Text="" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" Foreground="#34D399" Margin="0,0,0,8"/>
+                                    <CheckBox x:Name="ChkPackWorkspace" Content="" IsChecked="False" FontSize="11" Margin="0,0,0,10"/>
+
+                                    <Button x:Name="BtnExportPack" Content="" Background="#059669" BorderBrush="#10B981" Foreground="White" Padding="10,8" Margin="0,0,0,8"/>
+                                    <Button x:Name="BtnImportPack" Content="" Background="#7C3AED" BorderBrush="#8B5CF6" Foreground="White" Padding="10,8"/>
+
+                                    <TextBlock x:Name="TxtTransferNote" TextWrapping="Wrap" Foreground="#A1A1AA" FontSize="11" Margin="0,10,0,0" Text=""/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
 
                     <!-- Target Column -->
                     <Border Grid.Column="2" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="10" Padding="14">
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                                 <TextBlock x:Name="LblDstInstance" Text="" FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
-                                <ComboBox x:Name="CmbTargetInstance" Height="32" Margin="0,0,0,8"/>
+                                <ComboBox x:Name="CmbTargetInstance" Height="30" Margin="0,0,0,8"/>
                                 <TextBlock x:Name="TxtTargetSummary" Text="" Foreground="#A1A1AA" FontSize="12"/>
                             </StackPanel>
                             <ListBox x:Name="LstTargetSessions" Background="#09090B" Foreground="#A1A1AA" BorderBrush="#27272A" FontSize="12"/>
@@ -458,7 +479,6 @@ function T([string]$Key) {
                         <ColumnDefinition Width="1*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Left: claude:// Protocol Interceptor -->
                     <Border Grid.Column="0" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,12,0">
                         <StackPanel>
                             <TextBlock x:Name="LblProtoTitle" Text="" FontSize="15" FontWeight="Bold" Margin="0,0,0,6"/>
@@ -498,7 +518,6 @@ function T([string]$Key) {
                         </StackPanel>
                     </Border>
 
-                    <!-- Right: Config & MCP Cloner -->
                     <Border Grid.Column="1" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="10" Padding="16">
                         <StackPanel>
                             <TextBlock x:Name="LblSyncTitle" Text="" FontSize="15" FontWeight="Bold" Margin="0,0,0,6"/>
@@ -528,7 +547,6 @@ function T([string]$Key) {
                         <ColumnDefinition Width="1.1*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Left: Auto-Update & 1p Policy -->
                     <Border Grid.Column="0" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,12,0">
                         <StackPanel>
                             <TextBlock x:Name="LblUpdateTitle" Text="" FontSize="15" FontWeight="Bold" Margin="0,0,0,6"/>
@@ -549,7 +567,6 @@ function T([string]$Key) {
                         </StackPanel>
                     </Border>
 
-                    <!-- Right: Backups -->
                     <Border Grid.Column="1" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="10" Padding="16">
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
@@ -621,6 +638,7 @@ $CmbTargetInstance     = $Window.FindName("CmbTargetInstance")
 $TxtSessionFilter      = $Window.FindName("TxtSessionFilter")
 $BtnSelectAllSessions  = $Window.FindName("BtnSelectAllSessions")
 $BtnClearSessionSelection = $Window.FindName("BtnClearSessionSelection")
+$BtnViewTranscript     = $Window.FindName("BtnViewTranscript")
 $LstSourceSessions     = $Window.FindName("LstSourceSessions")
 $LstTargetSessions     = $Window.FindName("LstTargetSessions")
 $TxtTargetSummary      = $Window.FindName("TxtTargetSummary")
@@ -628,6 +646,9 @@ $ChkIncludeSubSessions = $Window.FindName("ChkIncludeSubSessions")
 $ChkAutoBackupMove     = $Window.FindName("ChkAutoBackupMove")
 $BtnCopySessions       = $Window.FindName("BtnCopySessions")
 $BtnMoveSessions       = $Window.FindName("BtnMoveSessions")
+$ChkPackWorkspace      = $Window.FindName("ChkPackWorkspace")
+$BtnExportPack         = $Window.FindName("BtnExportPack")
+$BtnImportPack         = $Window.FindName("BtnImportPack")
 
 # Tab 3
 $TxtProtoDetailStatus  = $Window.FindName("TxtProtoDetailStatus")
@@ -665,6 +686,7 @@ $LstBackups               = $Window.FindName("LstBackups")
 $BrushConv = New-Object System.Windows.Media.BrushConverter
 $script:CachedInstances = @()
 $script:CachedSourceSessions = @()
+$script:SuppressComboEvents = $false
 
 function Set-Status([string]$Message) {
     $TxtStatusBar.Text = "[$(Get-Date -Format 'HH:mm:ss')] $Message"
@@ -698,11 +720,16 @@ function Apply-Localization {
     $Window.FindName("LblFilter").Text            = T "LblFilter"
     $BtnSelectAllSessions.Content                 = T "BtnSelectAll"
     $BtnClearSessionSelection.Content             = T "BtnClearSel"
+    $BtnViewTranscript.Content                    = T "BtnViewTranscript"
     $Window.FindName("LblTransferHeader").Text    = T "LblTransferHeader"
     $ChkIncludeSubSessions.Content                = T "ChkIncludeSub"
     $ChkAutoBackupMove.Content                    = T "ChkAutoBackup"
     $BtnCopySessions.Content                      = T "BtnCopySessions"
     $BtnMoveSessions.Content                      = T "BtnMoveSessions"
+    $Window.FindName("LblPortableHeader").Text    = T "LblPortableHeader"
+    $ChkPackWorkspace.Content                     = T "ChkPackWorkspace"
+    $BtnExportPack.Content                        = T "BtnExportPack"
+    $BtnImportPack.Content                        = T "BtnImportPack"
     $Window.FindName("TxtTransferNote").Text      = T "TxtTransferNote"
     $Window.FindName("LblDstInstance").Text       = T "LblDstInstance"
     $Window.FindName("LblProtoTitle").Text        = T "LblProtoTitle"
@@ -794,24 +821,31 @@ function Refresh-UpdateAndBackupUI {
     }
 }
 
+function Update-SourceSessionFilterOnly {
+    $LstSourceSessions.Items.Clear()
+    $filter = $TxtSessionFilter.Text.Trim()
+    foreach ($s in $script:CachedSourceSessions) {
+        if ($filter -and ($s.DisplayLabel -notmatch [regex]::Escape($filter)) -and ($s.Cwd -notmatch [regex]::Escape($filter))) {
+            continue
+        }
+        $li = New-Object System.Windows.Controls.ListBoxItem
+        $li.Content = $s.DisplayLabel
+        $li.ToolTip = "Path: $($s.Cwd)`nSessionId: $($s.SessionId)`nCLI SessionId: $($s.CliSessionId)`nModel: $($s.Model)"
+        $li.Tag = $s.SessionId
+        [void]$LstSourceSessions.Items.Add($li)
+    }
+}
+
 function Refresh-SessionLists {
+    if ($script:SuppressComboEvents) { return }
     $srcItem = $CmbSourceInstance.SelectedItem
     $dstItem = $CmbTargetInstance.SelectedItem
 
-    $LstSourceSessions.Items.Clear()
     if ($srcItem -and $srcItem.Tag) {
         $script:CachedSourceSessions = @(Get-ClaudeInstanceSessions -InstanceId ([string]$srcItem.Tag))
-        $filter = $TxtSessionFilter.Text.Trim()
-        foreach ($s in $script:CachedSourceSessions) {
-            if ($filter -and ($s.DisplayLabel -notmatch [regex]::Escape($filter)) -and ($s.Cwd -notmatch [regex]::Escape($filter))) {
-                continue
-            }
-            $li = New-Object System.Windows.Controls.ListBoxItem
-            $li.Content = $s.DisplayLabel
-            $li.ToolTip = "Path: $($s.Cwd)`nSessionId: $($s.SessionId)`nModel: $($s.Model)"
-            $li.Tag = $s.SessionId
-            [void]$LstSourceSessions.Items.Add($li)
-        }
+        Update-SourceSessionFilterOnly
+    } else {
+        $LstSourceSessions.Items.Clear()
     }
 
     $LstTargetSessions.Items.Clear()
@@ -828,251 +862,255 @@ function Refresh-SessionLists {
 }
 
 function Refresh-InstancesUI {
-    $script:CachedInstances = @(Get-ClaudeInstances)
-    $InstancesContainer.Children.Clear()
+    $script:SuppressComboEvents = $true
+    try {
+        $script:CachedInstances = @(Get-ClaudeInstances)
+        $InstancesContainer.Children.Clear()
 
-    $combos = @($CmbSourceInstance, $CmbTargetInstance, $CmbProtoFixedInstance, $CmbManualUrlInstance, $CmbSyncSrc, $CmbSyncDst)
-    $prevSel = @{}
-    foreach ($c in $combos) {
-        if ($c.SelectedItem -and $c.SelectedItem.Tag) { $prevSel[$c.Name] = [string]$c.SelectedItem.Tag }
-        $c.Items.Clear()
-    }
-
-    foreach ($inst in $script:CachedInstances) {
+        $combos = @($CmbSourceInstance, $CmbTargetInstance, $CmbProtoFixedInstance, $CmbManualUrlInstance, $CmbSyncSrc, $CmbSyncDst)
+        $prevSel = @{}
         foreach ($c in $combos) {
-            $ci = New-Object System.Windows.Controls.ComboBoxItem
-            $ci.Content = "[$($inst.BadgeText)] $($inst.DisplayName)"
-            $ci.Tag = $inst.Id
-            [void]$c.Items.Add($ci)
+            if ($c.SelectedItem -and $c.SelectedItem.Tag) { $prevSel[$c.Name] = [string]$c.SelectedItem.Tag }
+            $c.Items.Clear()
         }
 
-        $card = New-Object System.Windows.Controls.Border
-        $card.Background = $BrushConv.ConvertFromString("#18181B")
-        $card.BorderBrush = $BrushConv.ConvertFromString($inst.BadgeColor)
-        $card.BorderThickness = New-Object System.Windows.Thickness(4, 1, 1, 1)
-        $card.CornerRadius = New-Object System.Windows.CornerRadius(10)
-        $card.Padding = New-Object System.Windows.Thickness(14)
-        $card.Margin = New-Object System.Windows.Thickness(0, 0, 0, 12)
+        foreach ($inst in $script:CachedInstances) {
+            foreach ($c in $combos) {
+                $ci = New-Object System.Windows.Controls.ComboBoxItem
+                $ci.Content = "[$($inst.BadgeText)] $($inst.DisplayName)"
+                $ci.Tag = $inst.Id
+                [void]$c.Items.Add($ci)
+            }
 
-        $stack = New-Object System.Windows.Controls.StackPanel
+            $card = New-Object System.Windows.Controls.Border
+            $card.Background = $BrushConv.ConvertFromString("#18181B")
+            $card.BorderBrush = $BrushConv.ConvertFromString($inst.BadgeColor)
+            $card.BorderThickness = New-Object System.Windows.Thickness(4, 1, 1, 1)
+            $card.CornerRadius = New-Object System.Windows.CornerRadius(10)
+            $card.Padding = New-Object System.Windows.Thickness(14)
+            $card.Margin = New-Object System.Windows.Thickness(0, 0, 0, 12)
 
-        $topDock = New-Object System.Windows.Controls.DockPanel
-        $topDock.LastChildFill = $false
+            $stack = New-Object System.Windows.Controls.StackPanel
 
-        $leftHeader = New-Object System.Windows.Controls.StackPanel
-        $leftHeader.Orientation = "Horizontal"
-        [System.Windows.Controls.DockPanel]::SetDock($leftHeader, "Left")
+            $topDock = New-Object System.Windows.Controls.DockPanel
+            $topDock.LastChildFill = $false
 
-        $badgeBorder = New-Object System.Windows.Controls.Border
-        $badgeBorder.Width = 34
-        $badgeBorder.Height = 34
-        $badgeBorder.CornerRadius = New-Object System.Windows.CornerRadius(17)
-        $badgeBorder.Background = $BrushConv.ConvertFromString($inst.BadgeColor)
-        $badgeBorder.Margin = New-Object System.Windows.Thickness(0, 0, 10, 0)
-        $badgeTxt = New-Object System.Windows.Controls.TextBlock
-        $badgeTxt.Text = $inst.BadgeText
-        $badgeTxt.Foreground = [System.Windows.Media.Brushes]::White
-        $badgeTxt.FontWeight = "Bold"
-        $badgeTxt.HorizontalAlignment = "Center"
-        $badgeTxt.VerticalAlignment = "Center"
-        $badgeBorder.Child = $badgeTxt
-        [void]$leftHeader.Children.Add($badgeBorder)
+            $leftHeader = New-Object System.Windows.Controls.StackPanel
+            $leftHeader.Orientation = "Horizontal"
+            [System.Windows.Controls.DockPanel]::SetDock($leftHeader, "Left")
 
-        $titleStack = New-Object System.Windows.Controls.StackPanel
-        $titleTxt = New-Object System.Windows.Controls.TextBlock
-        $primTag = if ($inst.IsPrimary) { T "PrimaryTag" } else { T "IsolatedTag" }
-        $titleTxt.Text = "$($inst.DisplayName)$primTag"
-        $titleTxt.FontSize = 15
-        $titleTxt.FontWeight = "Bold"
-        $titleTxt.Foreground = $BrushConv.ConvertFromString("#F4F4F5")
-        [void]$titleStack.Children.Add($titleTxt)
+            $badgeBorder = New-Object System.Windows.Controls.Border
+            $badgeBorder.Width = 34
+            $badgeBorder.Height = 34
+            $badgeBorder.CornerRadius = New-Object System.Windows.CornerRadius(17)
+            $badgeBorder.Background = $BrushConv.ConvertFromString($inst.BadgeColor)
+            $badgeBorder.Margin = New-Object System.Windows.Thickness(0, 0, 10, 0)
+            $badgeTxt = New-Object System.Windows.Controls.TextBlock
+            $badgeTxt.Text = $inst.BadgeText
+            $badgeTxt.Foreground = [System.Windows.Media.Brushes]::White
+            $badgeTxt.FontWeight = "Bold"
+            $badgeTxt.HorizontalAlignment = "Center"
+            $badgeTxt.VerticalAlignment = "Center"
+            $badgeBorder.Child = $badgeTxt
+            [void]$leftHeader.Children.Add($badgeBorder)
 
-        $subTxt = New-Object System.Windows.Controls.TextBlock
-        $subTxt.Text = "$($inst.AccountLabel)  |  ID: $($inst.Id)"
-        $subTxt.FontSize = 11
-        $subTxt.Foreground = $BrushConv.ConvertFromString("#A1A1AA")
-        [void]$titleStack.Children.Add($subTxt)
-        [void]$leftHeader.Children.Add($titleStack)
-        [void]$topDock.Children.Add($leftHeader)
+            $titleStack = New-Object System.Windows.Controls.StackPanel
+            $titleTxt = New-Object System.Windows.Controls.TextBlock
+            $primTag = if ($inst.IsPrimary) { T "PrimaryTag" } else { T "IsolatedTag" }
+            $titleTxt.Text = "$($inst.DisplayName)$primTag"
+            $titleTxt.FontSize = 15
+            $titleTxt.FontWeight = "Bold"
+            $titleTxt.Foreground = $BrushConv.ConvertFromString("#F4F4F5")
+            [void]$titleStack.Children.Add($titleTxt)
 
-        $statusBorder = New-Object System.Windows.Controls.Border
-        $statusBorder.CornerRadius = New-Object System.Windows.CornerRadius(6)
-        $statusBorder.Padding = New-Object System.Windows.Thickness(10, 4, 10, 4)
-        [System.Windows.Controls.DockPanel]::SetDock($statusBorder, "Right")
-        $statusTxt = New-Object System.Windows.Controls.TextBlock
-        $statusTxt.FontSize = 11
-        $statusTxt.FontWeight = "SemiBold"
-        if ($inst.IsRunning) {
-            $statusBorder.Background = $BrushConv.ConvertFromString("#064E3B")
-            $statusTxt.Foreground = $BrushConv.ConvertFromString("#34D399")
-            $statusTxt.Text = "$(T 'StatusRunning') ($($inst.ProcessCount) proc | $($inst.RamMB) MB)"
-        } else {
-            $statusBorder.Background = $BrushConv.ConvertFromString("#27272A")
-            $statusTxt.Foreground = $BrushConv.ConvertFromString("#A1A1AA")
-            $statusTxt.Text = T "StatusStopped"
-        }
-        $statusBorder.Child = $statusTxt
-        [void]$topDock.Children.Add($statusBorder)
-        [void]$stack.Children.Add($topDock)
+            $subTxt = New-Object System.Windows.Controls.TextBlock
+            $subTxt.Text = "$($inst.AccountLabel)  |  ID: $($inst.Id)"
+            $subTxt.FontSize = 11
+            $subTxt.Foreground = $BrushConv.ConvertFromString("#A1A1AA")
+            [void]$titleStack.Children.Add($subTxt)
+            [void]$leftHeader.Children.Add($titleStack)
+            [void]$topDock.Children.Add($leftHeader)
 
-        $infoTxt = New-Object System.Windows.Controls.TextBlock
-        $dispLabel = if ($inst.DispatchEnabled) { "ON" } else { "OFF" }
-        $vmLabel = if ($inst.VmDiskPresent) { "OK" } else { "—" }
-        $infoTxt.Text = "AccountUUID: $($inst.AccountUuid)   |   OrgUUID: $($inst.OrgUuid)`nSessions: $($inst.SessionCount)   |   Dispatch: $dispLabel   |   VM Disk: $vmLabel"
-        $infoTxt.FontSize = 11
-        $infoTxt.Foreground = $BrushConv.ConvertFromString("#A1A1AA")
-        $infoTxt.Margin = New-Object System.Windows.Thickness(0, 8, 0, 10)
-        [void]$stack.Children.Add($infoTxt)
-
-        $btnWrap = New-Object System.Windows.Controls.WrapPanel
-
-        if ($inst.IsRunning) {
-            $btnStop = New-Object System.Windows.Controls.Button
-            $btnStop.Content = T "BtnStop"
-            $btnStop.Background = $BrushConv.ConvertFromString("#7F1D1D")
-            $btnStop.BorderBrush = $BrushConv.ConvertFromString("#991B1B")
-            $btnStop.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
-            $btnStop.Tag = $inst.Id
-            $btnStop.Add_Click({
-                param($s, $e)
-                $cnt = Stop-ClaudeInstance -InstanceId ([string]$s.Tag)
-                Set-Status "Stopped instance '$($s.Tag)' ($cnt processes terminated)."
-                Refresh-InstancesUI
-            })
-            [void]$btnWrap.Children.Add($btnStop)
-        } else {
-            $btnStart = New-Object System.Windows.Controls.Button
-            $btnStart.Content = T "BtnOpen"
-            $btnStart.Background = $BrushConv.ConvertFromString("#065F46")
-            $btnStart.BorderBrush = $BrushConv.ConvertFromString("#059669")
-            $btnStart.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
-            $btnStart.Tag = $inst.Id
-            $btnStart.Add_Click({
-                param($s, $e)
-                Start-ClaudeInstance -InstanceId ([string]$s.Tag)
-                Set-Status "Started instance '$($s.Tag)'."
-                Start-Sleep -Milliseconds 800
-                Refresh-InstancesUI
-            })
-            [void]$btnWrap.Children.Add($btnStart)
-        }
-
-        $btnLogin = New-Object System.Windows.Controls.Button
-        $btnLogin.Content = T "BtnLogin"
-        $btnLogin.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
-        $btnLogin.Tag = $inst.Id
-        $btnLogin.Add_Click({
-            param($s, $e)
-            $id = [string]$s.Tag
-            $promptMsg = if ($script:CurrentLang -eq "en-US") {
-                "Do you want to clear existing web session cookies in '$id' before opening for login?`n`n- YES: Clears only auth cookies/tokens (keeps all sessions, projects, and MCPs) and arms the claude:// router for this instance.`n- NO: Only arms the claude:// router for this instance and launches the window."
+            $statusBorder = New-Object System.Windows.Controls.Border
+            $statusBorder.CornerRadius = New-Object System.Windows.CornerRadius(6)
+            $statusBorder.Padding = New-Object System.Windows.Thickness(10, 4, 10, 4)
+            [System.Windows.Controls.DockPanel]::SetDock($statusBorder, "Right")
+            $statusTxt = New-Object System.Windows.Controls.TextBlock
+            $statusTxt.FontSize = 11
+            $statusTxt.FontWeight = "SemiBold"
+            if ($inst.IsRunning) {
+                $statusBorder.Background = $BrushConv.ConvertFromString("#064E3B")
+                $statusTxt.Foreground = $BrushConv.ConvertFromString("#34D399")
+                $statusTxt.Text = "$(T 'StatusRunning') ($($inst.ProcessCount) proc | $($inst.RamMB) MB)"
             } else {
-                "Deseja limpar os cookies de sessão atuais de '$id' antes de abrir para login?`n`n- SIM: Limpa apenas os cookies/tokens de autenticação (mantendo todos os seus projetos, sessões e MCPs) e arma o roteador claude:// para esta instância.`n- NÃO: Apenas arma o roteador claude:// para esta instância e abre a janela."
+                $statusBorder.Background = $BrushConv.ConvertFromString("#27272A")
+                $statusTxt.Foreground = $BrushConv.ConvertFromString("#A1A1AA")
+                $statusTxt.Text = T "StatusStopped"
             }
-            $res = [System.Windows.MessageBox]::Show(
-                $promptMsg,
-                "Login — $id",
-                [System.Windows.MessageBoxButton]::YesNoCancel,
-                [System.Windows.MessageBoxImage]::Question
-            )
-            if ($res -eq [System.Windows.MessageBoxResult]::Cancel) { return }
-            if ($res -eq [System.Windows.MessageBoxResult]::Yes) {
-                Clear-ClaudeInstanceAuth -InstanceId $id | Out-Null
+            $statusBorder.Child = $statusTxt
+            [void]$topDock.Children.Add($statusBorder)
+            [void]$stack.Children.Add($topDock)
+
+            $infoTxt = New-Object System.Windows.Controls.TextBlock
+            $dispLabel = if ($inst.DispatchEnabled) { "ON" } else { "OFF" }
+            $vmLabel = if ($inst.VmDiskPresent) { "OK" } else { "—" }
+            $infoTxt.Text = "AccountUUID: $($inst.AccountUuid)   |   OrgUUID: $($inst.OrgUuid)`nSessions: $($inst.SessionCount)   |   Dispatch: $dispLabel   |   VM Disk: $vmLabel"
+            $infoTxt.FontSize = 11
+            $infoTxt.Foreground = $BrushConv.ConvertFromString("#A1A1AA")
+            $infoTxt.Margin = New-Object System.Windows.Thickness(0, 8, 0, 10)
+            [void]$stack.Children.Add($infoTxt)
+
+            $btnWrap = New-Object System.Windows.Controls.WrapPanel
+
+            if ($inst.IsRunning) {
+                $btnStop = New-Object System.Windows.Controls.Button
+                $btnStop.Content = T "BtnStop"
+                $btnStop.Background = $BrushConv.ConvertFromString("#7F1D1D")
+                $btnStop.BorderBrush = $BrushConv.ConvertFromString("#991B1B")
+                $btnStop.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
+                $btnStop.Tag = $inst.Id
+                $btnStop.Add_Click({
+                    param($s, $e)
+                    $cnt = Stop-ClaudeInstance -InstanceId ([string]$s.Tag)
+                    Set-Status "Stopped instance '$($s.Tag)' ($cnt processes terminated)."
+                    Refresh-InstancesUI
+                })
+                [void]$btnWrap.Children.Add($btnStop)
+            } else {
+                $btnStart = New-Object System.Windows.Controls.Button
+                $btnStart.Content = T "BtnOpen"
+                $btnStart.Background = $BrushConv.ConvertFromString("#065F46")
+                $btnStart.BorderBrush = $BrushConv.ConvertFromString("#059669")
+                $btnStart.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
+                $btnStart.Tag = $inst.Id
+                $btnStart.Add_Click({
+                    param($s, $e)
+                    Start-ClaudeInstance -InstanceId ([string]$s.Tag)
+                    Set-Status "Started instance '$($s.Tag)'."
+                    Refresh-InstancesUI
+                })
+                [void]$btnWrap.Children.Add($btnStart)
             }
-            Set-ClaudeLoginTarget -InstanceId $id -MinutesValid 15
-            Start-ClaudeInstance -InstanceId $id
-            Refresh-ProtocolUI
-            Refresh-InstancesUI
-            Set-Status "claude:// login target armed for '$id' (15 min)."
-        })
-        [void]$btnWrap.Children.Add($btnLogin)
 
-        $btnRemap = New-Object System.Windows.Controls.Button
-        $btnRemap.Content = T "BtnRemap"
-        $btnRemap.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
-        $btnRemap.Tag = $inst.Id
-        $btnRemap.Add_Click({
-            param($s, $e)
-            $id = [string]$s.Tag
-            $cnt = Repair-ClaudeInstanceSessionOwnership -InstanceId $id
-            Refresh-InstancesUI
-            Refresh-SessionLists
-            Set-Status "Bound $cnt session(s) in '$id' to active account UUID."
-        })
-        [void]$btnWrap.Children.Add($btnRemap)
+            $btnLogin = New-Object System.Windows.Controls.Button
+            $btnLogin.Content = T "BtnLogin"
+            $btnLogin.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
+            $btnLogin.Tag = $inst.Id
+            $btnLogin.Add_Click({
+                param($s, $e)
+                $id = [string]$s.Tag
+                $promptMsg = if ($script:CurrentLang -eq "en-US") {
+                    "Do you want to clear existing web session cookies in '$id' before opening for login?`n`n- YES: Clears only auth cookies/tokens (keeps all sessions, projects, and MCPs) and arms the claude:// router for this instance.`n- NO: Only arms the claude:// router for this instance and launches the window."
+                } else {
+                    "Deseja limpar os cookies de sessão atuais de '$id' antes de abrir para login?`n`n- SIM: Limpa apenas os cookies/tokens de autenticação (mantendo todos os seus projetos, sessões e MCPs) e arma o roteador claude:// para esta instância.`n- NÃO: Apenas arma o roteador claude:// para esta instância e abre a janela."
+                }
+                $res = [System.Windows.MessageBox]::Show(
+                    $promptMsg,
+                    "Login — $id",
+                    [System.Windows.MessageBoxButton]::YesNoCancel,
+                    [System.Windows.MessageBoxImage]::Question
+                )
+                if ($res -eq [System.Windows.MessageBoxResult]::Cancel) { return }
+                if ($res -eq [System.Windows.MessageBoxResult]::Yes) {
+                    Clear-ClaudeInstanceAuth -InstanceId $id | Out-Null
+                }
+                Set-ClaudeLoginTarget -InstanceId $id -MinutesValid 15
+                Start-ClaudeInstance -InstanceId $id
+                Refresh-ProtocolUI
+                Refresh-InstancesUI
+                Set-Status "claude:// login target armed for '$id' (15 min)."
+            })
+            [void]$btnWrap.Children.Add($btnLogin)
 
-        $btnDisp = New-Object System.Windows.Controls.Button
-        $btnDisp.Content = if ($inst.DispatchEnabled) { "Dispatch: ON" } else { "Dispatch: OFF" }
-        $btnDisp.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
-        $btnDisp.Tag = $inst
-        $btnDisp.Add_Click({
-            param($s, $e)
-            $targetInst = $s.Tag
-            $newState = -not $targetInst.DispatchEnabled
-            Set-ClaudeInstanceDispatch -InstanceId $targetInst.Id -Enabled $newState | Out-Null
-            Refresh-InstancesUI
-            Set-Status "Dispatch set to $newState on '$($targetInst.DisplayName)'."
-        })
-        [void]$btnWrap.Children.Add($btnDisp)
+            $btnRemap = New-Object System.Windows.Controls.Button
+            $btnRemap.Content = T "BtnRemap"
+            $btnRemap.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
+            $btnRemap.Tag = $inst.Id
+            $btnRemap.Add_Click({
+                param($s, $e)
+                $id = [string]$s.Tag
+                $cnt = Repair-ClaudeInstanceSessionOwnership -InstanceId $id
+                Clear-ClaudeSessionCache -InstanceId $id
+                Refresh-InstancesUI
+                Refresh-SessionLists
+                Set-Status "Bound $cnt session(s) in '$id' to active account UUID."
+            })
+            [void]$btnWrap.Children.Add($btnRemap)
 
-        $btnEdit = New-Object System.Windows.Controls.Button
-        $btnEdit.Content = T "BtnEdit"
-        $btnEdit.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
-        $btnEdit.Tag = $inst
-        $btnEdit.Add_Click({
-            param($s, $e)
-            $targetInst = $s.Tag
-            $script:IsEditingExisting = $true
-            $TxtFormTitle.Text = "$(T 'FormTitleEdit'): $($targetInst.DisplayName)"
-            $InputInstId.Text = $targetInst.Id
-            $InputInstId.IsEnabled = $false
-            $InputInstDisplayName.Text = $targetInst.DisplayName
-            $InputInstLabel.Text = $targetInst.AccountLabel
-            $InputInstBadgeText.Text = $targetInst.BadgeText
-            $InputInstBadgeColor.Text = $targetInst.BadgeColor
-            Set-Status "Editing '$($targetInst.Id)'."
-        })
-        [void]$btnWrap.Children.Add($btnEdit)
+            $btnDisp = New-Object System.Windows.Controls.Button
+            $btnDisp.Content = if ($inst.DispatchEnabled) { "Dispatch: ON" } else { "Dispatch: OFF" }
+            $btnDisp.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
+            $btnDisp.Tag = $inst
+            $btnDisp.Add_Click({
+                param($s, $e)
+                $targetInst = $s.Tag
+                $newState = -not $targetInst.DispatchEnabled
+                Set-ClaudeInstanceDispatch -InstanceId $targetInst.Id -Enabled $newState | Out-Null
+                Refresh-InstancesUI
+                Set-Status "Dispatch set to $newState on '$($targetInst.DisplayName)'."
+            })
+            [void]$btnWrap.Children.Add($btnDisp)
 
-        $btnFolder = New-Object System.Windows.Controls.Button
-        $btnFolder.Content = T "BtnFolder"
-        $btnFolder.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
-        $btnFolder.Tag = $inst.DataDir
-        $btnFolder.Add_Click({
-            param($s, $e)
-            $dir = [string]$s.Tag
-            if (Test-Path $dir) { Start-Process "explorer.exe" -ArgumentList "`"$dir`"" }
-        })
-        [void]$btnWrap.Children.Add($btnFolder)
+            $btnEdit = New-Object System.Windows.Controls.Button
+            $btnEdit.Content = T "BtnEdit"
+            $btnEdit.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
+            $btnEdit.Tag = $inst
+            $btnEdit.Add_Click({
+                param($s, $e)
+                $targetInst = $s.Tag
+                $script:IsEditingExisting = $true
+                $TxtFormTitle.Text = "$(T 'FormTitleEdit'): $($targetInst.DisplayName)"
+                $InputInstId.Text = $targetInst.Id
+                $InputInstId.IsEnabled = $false
+                $InputInstDisplayName.Text = $targetInst.DisplayName
+                $InputInstLabel.Text = $targetInst.AccountLabel
+                $InputInstBadgeText.Text = $targetInst.BadgeText
+                $InputInstBadgeColor.Text = $targetInst.BadgeColor
+                Set-Status "Editing '$($targetInst.Id)'."
+            })
+            [void]$btnWrap.Children.Add($btnEdit)
 
-        [void]$stack.Children.Add($btnWrap)
-        $card.Child = $stack
-        [void]$InstancesContainer.Children.Add($card)
-    }
+            $btnFolder = New-Object System.Windows.Controls.Button
+            $btnFolder.Content = T "BtnFolder"
+            $btnFolder.Margin = New-Object System.Windows.Thickness(0, 0, 6, 6)
+            $btnFolder.Tag = $inst.DataDir
+            $btnFolder.Add_Click({
+                param($s, $e)
+                $dir = [string]$s.Tag
+                if (Test-Path $dir) { Start-Process "explorer.exe" -ArgumentList "`"$dir`"" }
+            })
+            [void]$btnWrap.Children.Add($btnFolder)
 
-    foreach ($c in $combos) {
-        $wanted = $prevSel[$c.Name]
-        $matched = $false
-        if ($wanted) {
-            foreach ($item in $c.Items) {
-                if ([string]$item.Tag -eq $wanted) {
-                    $c.SelectedItem = $item
-                    $matched = $true
-                    break
+            [void]$stack.Children.Add($btnWrap)
+            $card.Child = $stack
+            [void]$InstancesContainer.Children.Add($card)
+        }
+
+        foreach ($c in $combos) {
+            $wanted = $prevSel[$c.Name]
+            $matched = $false
+            if ($wanted) {
+                foreach ($item in $c.Items) {
+                    if ([string]$item.Tag -eq $wanted) {
+                        $c.SelectedItem = $item
+                        $matched = $true
+                        break
+                    }
+                }
+            }
+            if (-not $matched -and $c.Items.Count -gt 0) {
+                if (($c.Name -eq "CmbTargetInstance" -or $c.Name -eq "CmbSyncDst") -and $c.Items.Count -gt 1) {
+                    $c.SelectedIndex = $c.Items.Count - 1
+                } else {
+                    $c.SelectedIndex = 0
                 }
             }
         }
-        if (-not $matched -and $c.Items.Count -gt 0) {
-            if (($c.Name -eq "CmbTargetInstance" -or $c.Name -eq "CmbSyncDst") -and $c.Items.Count -gt 1) {
-                $c.SelectedIndex = $c.Items.Count - 1
-            } else {
-                $c.SelectedIndex = 0
-            }
-        }
+    } finally {
+        $script:SuppressComboEvents = $false
     }
 }
 
-# Select initial language in ComboBox
 foreach ($item in $CmbLanguage.Items) {
     if ([string]$item.Tag -eq $script:CurrentLang) {
         $CmbLanguage.SelectedItem = $item
@@ -1096,6 +1134,7 @@ $CmbLanguage.Add_SelectionChanged({
 })
 
 $BtnRefreshAll.Add_Click({
+    Clear-ClaudeSessionCache
     Refresh-InstancesUI
     Refresh-SessionLists
     Refresh-ProtocolUI
@@ -1107,12 +1146,12 @@ $BtnSyncAllLinks.Add_Click({
     $totalLinked = 0
     foreach ($inst in $script:CachedInstances) {
         if (-not $inst.IsPrimary) {
-            $res = Sync-ClaudeInstanceLinks -TargetDir $inst.DataDir
+            $res = Sync-ClaudeInstanceLinks -TargetDir $inst.DataDir -Force
             $totalLinked += $res.LinkedCount
         }
     }
     Refresh-InstancesUI
-    Set-Status "Hardlinks synchronized across all secondary instances ($totalLinked new files linked)."
+    Set-Status "Hardlinks synchronized across all secondary instances ($totalLinked files verified)."
 })
 
 $BtnColorBlue.Add_Click({   $InputInstBadgeColor.Text = "#2563EB" })
@@ -1162,10 +1201,27 @@ $BtnSaveInstance.Add_Click({
 
 $CmbSourceInstance.Add_SelectionChanged({ Refresh-SessionLists })
 $CmbTargetInstance.Add_SelectionChanged({ Refresh-SessionLists })
-$TxtSessionFilter.Add_TextChanged({ Refresh-SessionLists })
+# Fast in-memory filter on keystroke without touching disk
+$TxtSessionFilter.Add_TextChanged({ Update-SourceSessionFilterOnly })
 
 $BtnSelectAllSessions.Add_Click({ $LstSourceSessions.SelectAll() })
 $BtnClearSessionSelection.Add_Click({ $LstSourceSessions.UnselectAll() })
+
+$BtnViewTranscript.Add_Click({
+    try {
+        $srcItem = $CmbSourceInstance.SelectedItem
+        if (-not $srcItem) { return }
+        if ($LstSourceSessions.SelectedItems.Count -eq 0) {
+            [System.Windows.MessageBox]::Show("Select a session from the source list to view its transcript.", "CIM", "OK", "Information") | Out-Null
+            return
+        }
+        $firstSid = [string]$LstSourceSessions.SelectedItems[0].Tag
+        $out = Export-ClaudeSessionReadableTranscript -InstanceId ([string]$srcItem.Tag) -SessionId $firstSid -OpenInBrowser
+        Set-Status "Opened HTML transcript: $($out.HtmlPath) (Markdown saved at $($out.MdPath))"
+    } catch {
+        [System.Windows.MessageBox]::Show($_.Exception.Message, "Error", "OK", "Error") | Out-Null
+    }
+})
 
 function Invoke-SessionTransfer([bool]$MoveMode) {
     try {
@@ -1207,6 +1263,116 @@ function Invoke-SessionTransfer([bool]$MoveMode) {
 
 $BtnCopySessions.Add_Click({ Invoke-SessionTransfer -MoveMode $false })
 $BtnMoveSessions.Add_Click({ Invoke-SessionTransfer -MoveMode $true })
+
+# Portable Pack Export (.cimpack)
+$BtnExportPack.Add_Click({
+    try {
+        $srcItem = $CmbSourceInstance.SelectedItem
+        if (-not $srcItem) { return }
+        $srcId = [string]$srcItem.Tag
+
+        $selectedIds = @()
+        foreach ($sel in $LstSourceSessions.SelectedItems) {
+            $selectedIds += [string]$sel.Tag
+        }
+        if ($selectedIds.Count -eq 0) {
+            [System.Windows.MessageBox]::Show("Select at least one session/project from the source list to export.", "CIM", "OK", "Information") | Out-Null
+            return
+        }
+
+        $sfd = New-Object System.Windows.Forms.SaveFileDialog
+        $sfd.Title = "Export Claude Portable Package (.cimpack)"
+        $sfd.Filter = "CIM Portable Package (*.cimpack)|*.cimpack|ZIP Archive (*.zip)|*.zip"
+        $sfd.DefaultExt = "cimpack"
+        $sfd.FileName = "Claude-Project-Export-$(Get-Date -Format 'yyyyMMdd-HHmm').cimpack"
+
+        if ($sfd.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
+
+        Set-Status "Exporting portable package (.cimpack)..."
+        $res = Export-ClaudePortablePack `
+            -SourceInstanceId $srcId `
+            -SessionIds $selectedIds `
+            -OutputFilePath $sfd.FileName `
+            -IncludeWorkspaceFiles ($ChkPackWorkspace.IsChecked -eq $true) `
+            -IncludeSubSessions ($ChkIncludeSubSessions.IsChecked -eq $true)
+
+        Set-Status "Exported $($res.SessionCount) session(s) across $($res.ProjectCount) project(s) to $($res.OutputFilePath)"
+        [System.Windows.MessageBox]::Show(
+            "Portable package exported successfully!`n`nFile: $($res.OutputFilePath)`nSessions: $($res.SessionCount)`nProjects: $($res.ProjectCount)`n`nIncludes full Claude Code history (.jsonl), subagents, memories, side notes, and readable HTML/Markdown transcripts.",
+            "CIM — Export Complete",
+            "OK",
+            "Information"
+        ) | Out-Null
+    } catch {
+        [System.Windows.MessageBox]::Show($_.Exception.Message, "Export Error", "OK", "Error") | Out-Null
+    }
+})
+
+# Portable Pack Import (.cimpack) with Project Folder Remapping
+$BtnImportPack.Add_Click({
+    try {
+        $dstItem = $CmbTargetInstance.SelectedItem
+        if (-not $dstItem) { return }
+        $dstId = [string]$dstItem.Tag
+
+        $ofd = New-Object System.Windows.Forms.OpenFileDialog
+        $ofd.Title = "Import Claude Portable Package (.cimpack)"
+        $ofd.Filter = "CIM Portable Package (*.cimpack;*.zip)|*.cimpack;*.zip|All Files (*.*)|*.*"
+
+        if ($ofd.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
+
+        $manifest = Read-ClaudePortablePack -PackPath $ofd.FileName
+        $pathMappings = @{}
+
+        if ($manifest.projects) {
+            foreach ($proj in $manifest.projects) {
+                $origCwd = [string]$proj.originalCwd
+                if ([string]::IsNullOrWhiteSpace($origCwd) -or ($origCwd -match 'scratch-workspaces')) { continue }
+
+                $promptText = if ($script:CurrentLang -eq "en-US") {
+                    "Project '$($proj.projectName)' was originally located at:`n$origCwd`n`nDo you want to select a different local folder on this computer for this project?`n`n- YES: Browse and select local folder on this machine.`n- NO: Keep original path ($origCwd)."
+                } else {
+                    "O projeto '$($proj.projectName)' estava originalmente na pasta:`n$origCwd`n`nDeseja escolher uma nova pasta local neste computador para vincular este projeto?`n`n- SIM: Escolher a pasta local nesta máquina.`n- NÃO: Manter o caminho original ($origCwd)."
+                }
+
+                $choice = [System.Windows.MessageBox]::Show(
+                    $promptText,
+                    "Remap Project Path — $($proj.projectName)",
+                    [System.Windows.MessageBoxButton]::YesNoCancel,
+                    [System.Windows.MessageBoxImage]::Question
+                )
+                if ($choice -eq [System.Windows.MessageBoxResult]::Cancel) { return }
+                if ($choice -eq [System.Windows.MessageBoxResult]::Yes) {
+                    $fbd = New-Object System.Windows.Forms.FolderBrowserDialog
+                    $fbd.Description = "Select local directory for project: $($proj.projectName)"
+                    $fbd.ShowNewFolderButton = $true
+                    if ($fbd.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                        $pathMappings[$origCwd] = $fbd.SelectedPath
+                    }
+                }
+            }
+        }
+
+        Set-Status "Importing portable package into $($dstItem.Content)..."
+        $impRes = Import-ClaudePortablePack `
+            -PackPath $ofd.FileName `
+            -TargetInstanceId $dstId `
+            -PathMappings $pathMappings `
+            -ExtractWorkspaceFiles $true
+
+        Refresh-SessionLists
+        Refresh-InstancesUI
+        Set-Status "Imported $($impRes.ImportedSessions) session(s) into $($dstItem.Content) ($($impRes.FoldersAuthorized) folder(s) authorized)."
+        [System.Windows.MessageBox]::Show(
+            "Portable package imported successfully into $($dstItem.Content)!`n`nImported Sessions: $($impRes.ImportedSessions)`nAuthorized Folders: $($impRes.FoldersAuthorized)",
+            "CIM — Import Complete",
+            "OK",
+            "Information"
+        ) | Out-Null
+    } catch {
+        [System.Windows.MessageBox]::Show($_.Exception.Message, "Import Error", "OK", "Error") | Out-Null
+    }
+})
 
 $BtnEnableProto.Add_Click({
     $mode = if ($RbProtoFixed.IsChecked -eq $true) { "fixed" } else { "ask" }
@@ -1297,6 +1463,7 @@ $BtnRestoreBackup.Add_Click({
     )
     if ($confirm -eq [System.Windows.MessageBoxResult]::Yes) {
         Restore-ClaudeBackup -ZipPath ([string]$sel.Tag) | Out-Null
+        Clear-ClaudeSessionCache
         Refresh-InstancesUI
         Refresh-SessionLists
         Set-Status "Backup restored successfully."
@@ -1310,10 +1477,14 @@ $BtnOpenBackupsFolder.Add_Click({
 })
 
 Apply-Localization
-Refresh-InstancesUI
-Refresh-SessionLists
-Refresh-ProtocolUI
-Refresh-UpdateAndBackupUI
-Set-Status (T "MsgReady")
+
+# Populate UI immediately after window renders so startup is instantaneous
+$Window.Add_ContentRendered({
+    Refresh-InstancesUI
+    Refresh-SessionLists
+    Refresh-ProtocolUI
+    Refresh-UpdateAndBackupUI
+    Set-Status (T "MsgReady")
+})
 
 [void]$Window.ShowDialog()
