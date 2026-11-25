@@ -17,19 +17,20 @@ using System.IO;
 using System.Reflection;
 
 [assembly: AssemblyTitle("Claude Instance Manager")]
-[assembly: AssemblyDescription("Multi-Instance Manager, Portable Pack (.cimpack) Migrator, and claude:// Router for Claude Desktop on Windows")]
+[assembly: AssemblyDescription("Multi-Instance Manager, Portable Pack (.cimpack) Migrator, FinOps Metrics, and claude:// Router for Claude Desktop on Windows")]
 [assembly: AssemblyProduct("Claude Instance Manager (CIM)")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace ClaudeInstanceManager {
     public static class Program {
-        private const string BuildVersion = "1.1.0.0";
+        private const string BuildVersion = "1.2.0.0";
         private static readonly string[,] EmbeddedFiles = new string[,] {
             { "Claude-Instance-Manager.ps1", "Claude-Instance-Manager.ps1" },
             { "Launch-CIM.vbs",              "Launch-CIM.vbs" },
             { "Core-Instances.ps1",          "src\\Core-Instances.ps1" },
             { "Core-Sessions.ps1",           "src\\Core-Sessions.ps1" },
+            { "Core-Metrics.ps1",            "src\\Core-Metrics.ps1" },
             { "Core-ProtocolRouter.ps1",     "src\\Core-ProtocolRouter.ps1" },
             { "Core-SettingsBackup.ps1",     "src\\Core-SettingsBackup.ps1" },
             { "Protocol-Popup.ps1",          "src\\Protocol-Popup.ps1" },
@@ -131,6 +132,7 @@ $cscArgs = @(
     "/resource:`"$(Join-Path $ProjectRoot 'Launch-CIM.vbs')`",Launch-CIM.vbs",
     "/resource:`"$(Join-Path $ProjectRoot 'src\Core-Instances.ps1')`",Core-Instances.ps1",
     "/resource:`"$(Join-Path $ProjectRoot 'src\Core-Sessions.ps1')`",Core-Sessions.ps1",
+    "/resource:`"$(Join-Path $ProjectRoot 'src\Core-Metrics.ps1')`",Core-Metrics.ps1",
     "/resource:`"$(Join-Path $ProjectRoot 'src\Core-ProtocolRouter.ps1')`",Core-ProtocolRouter.ps1",
     "/resource:`"$(Join-Path $ProjectRoot 'src\Core-SettingsBackup.ps1')`",Core-SettingsBackup.ps1",
     "/resource:`"$(Join-Path $ProjectRoot 'src\Protocol-Popup.ps1')`",Protocol-Popup.ps1",
@@ -161,7 +163,7 @@ if (Test-Path (Join-Path $ProjectRoot "README.md")) {
 }
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$ZipOut = Join-Path $DistDir "Claude-Instance-Manager-v1.1.0-Portable.zip"
+$ZipOut = Join-Path $DistDir "Claude-Instance-Manager-v1.2.0-Portable.zip"
 if (Test-Path $ZipOut) { Remove-Item -Path $ZipOut -Force }
 [System.IO.Compression.ZipFile]::CreateFromDirectory($StageZipDir, $ZipOut)
 Remove-Item -Path $StageZipDir -Recurse -Force

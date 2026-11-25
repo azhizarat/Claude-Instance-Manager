@@ -121,7 +121,18 @@ if (Test-Path $coreSettingsPath) {
     Assert-True ($policy.DeploymentMode -eq "1p") "Task 4: Get-ClaudeUpdatePolicy reads 1p deploymentMode (Mode=$($policy.Mode))"
 }
 
-# --- Task 5: Main WPF GUI XAML Check ---
+# --- Task 5: Core-Metrics.ps1 (FastMetricsScanner & FinOps Report) ---
+$coreMetricsPath = Join-Path $SrcDir "Core-Metrics.ps1"
+Assert-True (Test-Path $coreMetricsPath) "Task 5: src/Core-Metrics.ps1 exists"
+if (Test-Path $coreMetricsPath) {
+    . $coreMetricsPath
+    $swMet = [System.Diagnostics.Stopwatch]::StartNew()
+    $rep = Get-ClaudeMetricsReport -Period "all" -IncludeSubagents $true
+    $swMet.Stop()
+    Assert-True ($null -ne $rep -and $null -ne $rep.Summary) "Task 5: Get-ClaudeMetricsReport computed ($($rep.Summary.TotalMessages) turns, $($rep.Summary.TotalCostFmt) USD in $($swMet.ElapsedMilliseconds) ms)"
+}
+
+# --- Task 6: Main WPF GUI XAML Check ---
 $mainGuiPath = Join-Path $ProjectRoot "Claude-Instance-Manager.ps1"
 if (Test-Path $mainGuiPath) {
     $checkOut = & powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File $mainGuiPath -CheckOnly 2>&1

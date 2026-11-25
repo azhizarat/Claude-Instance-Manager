@@ -23,7 +23,8 @@ O aplicativo utiliza a interface gráfica Windows Presentation Foundation (WPF) 
 5. **Redirecionamento Incorreto do Protocolo `claude://` (OAuth Login):** Durante a autenticação no navegador web, o sistema operacional envia o callback `claude://` sempre para a instância primária. O CIM intercepta o protocolo `claude://` através da chave dinâmica `ProgID` (`Shlwapi.dll!AssocQueryString`) e direciona o token de autenticação para a instância selecionada pelo usuário.
 6. **Reinicialização Forçada por Atualização Automática:** O atualizador padrão encerra todas as instâncias abertas para aplicar novas versões. O CIM configura o perfil local (`Claude-3p\configLibrary`) para permitir o download da atualização em segundo plano sem reiniciar o aplicativo automaticamente, mantendo o modo de operação `1p` ativo para evitar o bloqueio da tela corporativa Gateway (`3p`).
 7. **Transferência Portátil de Projetos entre Computadores (`.cimpack`):** O histórico completo de uma sessão do Claude Code é distribuído entre a pasta da instância local e o diretório global `%USERPROFILE%\.claude\projects\`. O CIM empacota todos os artefatos da sessão, subagentes, memórias (`MEMORY.md`), histórico de edições de arquivos, código-fonte opcional e transcrições legíveis em HTML/Markdown em um único arquivo `.cimpack`. Na importação em outro computador, o CIM permite remapear o caminho do diretório do repositório local e reescreve automaticamente as referências internas.
-8. **Motor de Alto Desempenho Pré-Compilado (`CIMNative.v4.dll`):** O CIM compila uma biblioteca nativa em C# que lê metadados de centenas de arquivos de sessão em milissegundos (ignorando blocos extensos de schemas MCP), consulta linhas de comando de processos diretamente via memória PEB do Windows (`NtQueryInformationProcess`) sem sobrecarga de consultas WMI e valida carimbos de sincronização (`.cim-sync-stamp`) antes de percorrer árvores de hardlinks.
+8. **Motor de Alto Desempenho Pré-Compilado (`CIMNative.v7.dll`):** O CIM compila uma biblioteca nativa em C# que lê metadados de centenas de arquivos de sessão em milissegundos (ignorando blocos extensos de schemas MCP), consulta linhas de comando de processos diretamente via memória PEB do Windows (`NtQueryInformationProcess`) sem sobrecarga de consultas WMI e valida carimbos de sincronização (`.cim-sync-stamp`) antes de percorrer árvores de hardlinks.
+9. **Telemetria FinOps de Consumo de Tokens e Custos em USD:** O CIM analisa os arquivos `.jsonl` de todas as sessões principais e subagentes em `%USERPROFILE%\.claude\projects\`, desduplica eventos de streaming por identificador de mensagem (`message.id`), consolida buckets diários em cache persistente (`cim-metrics-cache.v2.tsv`) e calcula o custo equivalente de API em dólares (`USD`) e a economia real obtida pelo Prompt Cache (`Cache Savings`).
 
 ---
 
@@ -156,15 +157,27 @@ O aplicativo utiliza a interface gráfica Windows Presentation Foundation (WPF) 
    * Para cada projeto contido no pacote, o CIM exibe o caminho original da pasta e pergunta se você deseja selecionar o diretório equivalente no computador atual.
    * Caso selecione um novo diretório local, o CIM reescreve automaticamente as propriedades `cwd` na sessão e no histórico `.jsonl`, instala os arquivos em `%USERPROFILE%\.claude\projects\<caminho-codificado>` e autoriza a nova pasta com `bypassPermissions`.
 
-#### 5.6. Configurar o Roteador de Protocolo `claude://`
-1. Selecione a aba **Roteador claude:// e Sincronização**.
+#### 5.6. Analisar Métricas de Consumo de Tokens e Custos (FinOps USD)
+1. Selecione a aba **Métricas e Custos (USD)**.
+2. Selecione o **Período** desejado (*Últimos 30 dias*, *Últimos 7 dias*, *Hoje*, *Este Mês*, *Todo o Histórico* ou *Datas Personalizadas* no formato `yyyy-MM-dd`).
+3. Refine a análise utilizando os seletores de **Instância**, **Projeto** e **Modelo**, ou marque a opção **Incluir Subagentes** para somar o consumo de agentes secundários.
+4. Consulte os quatro indicadores principais no topo da tela:
+   * **Custo Equivalente API (USD):** Valor estimado em dólares com base nos preços por milhão de tokens de cada modelo, acompanhado do custo bruto sem Prompt Cache.
+   * **Economia do Prompt Cache:** Valor economizado em dólares pelas leituras de cache (`Cache Read` a `0.10x` do valor base) e taxa percentual de acerto de cache (`Cache Hit Rate`).
+   * **Total de Tokens Processados:** Soma de tokens de entrada, escrita de cache, leitura de cache e saída (incluindo tokens de raciocínio).
+   * **Requisições / Turnos da API:** Quantidade total de chamadas desduplicadas por `message.id`.
+5. Navegue pelas cinco sub-abas de detalhamento: **Ranking por Projeto**, **Consumo por Modelo**, **Série Diária**, **Por Instância** e **Top 100 Conversas**.
+6. Clique em **Exportar HTML + CSV** e selecione uma pasta para gerar o relatório executivo em HTML Dark Mode e a planilha CSV para Excel ou Power BI.
+
+#### 5.7. Configurar o Roteador de Protocolo `claude://`
+1. Selecione a aba **Roteador claude:// e Sync**.
 2. Escolha o modo de operação:
    * **Exibir janela seletora para escolher a instância de destino (Recomendado):** Abre uma janela flutuante sempre que um link `claude://` é acionado fora do fluxo automático de login.
    * **Enviar automaticamente para a instância fixa selecionada:** Redireciona todos os links `claude://` para uma instância predeterminada.
 3. Clique em **Ativar / Salvar Roteador claude://**.
 4. Para remover a interceptação e restaurar o comportamento original do Windows, clique em **Restaurar Padrão do Windows**.
 
-#### 5.7. Controlar Atualizações Automáticas e Modo Dispatch
+#### 5.8. Controlar Atualizações Automáticas e Modo Dispatch
 1. Selecione a aba **Atualizações, Proteções e Backups**.
 2. Selecione a opção **Baixar atualizações em segundo plano, sem reiniciar automaticamente (Recomendado)**.
 3. Clique em **Aplicar Política de Atualização e Forçar Modo 1p**.
@@ -202,7 +215,8 @@ The application uses Windows Presentation Foundation (WPF) powered by the Window
 5. **Misrouted `claude://` Deep Links (OAuth Login):** Browser OAuth callbacks (`claude://`) are routed by Windows to the primary MSIX instance by default. CIM intercepts the `claude://` protocol via the dynamic AppX `ProgID` (`Shlwapi.dll!AssocQueryString`) and dispatches the callback URI directly to the target instance.
 6. **Forced Auto-Update Restarts:** The default updater terminates all running instances to apply updates. CIM configures the local managed profile (`Claude-3p\configLibrary`) to allow background update downloads without automatic restarts, while enforcing `deploymentMode: "1p"` to prevent accidental corporate Gateway (`3p`) lockouts.
 7. **Cross-Machine Portable Project Transfer (`.cimpack`):** Claude Code distributes session state across the instance directory and `%USERPROFILE%\.claude\projects\`. CIM bundles session metadata, CLI JSONL transcripts, subagent logs, project memories (`MEMORY.md`), file-history snapshots, readable HTML/Markdown transcripts, and optional workspace source files into a single `.cimpack` archive. Upon import on another machine, CIM prompts for local folder remapping and rewrites internal path references automatically.
-8. **Precompiled High-Performance Native Engine (`CIMNative.v4.dll`):** CIM compiles a native C# acceleration assembly that scans hundreds of session metadata files in milliseconds (skipping embedded MCP schema payloads), reads process command lines directly from Windows PEB memory (`NtQueryInformationProcess`) without WMI overhead, and checks synchronization stamps (`.cim-sync-stamp`) before walking NTFS hardlink trees.
+8. **Precompiled High-Performance Native Engine (`CIMNative.v7.dll`):** CIM compiles a native C# acceleration assembly that scans hundreds of session metadata files in milliseconds (skipping embedded MCP schema payloads), reads process command lines directly from Windows PEB memory (`NtQueryInformationProcess`) without WMI overhead, and checks synchronization stamps (`.cim-sync-stamp`) before walking NTFS hardlink trees.
+9. **Token Usage and USD Cost FinOps Telemetry:** CIM scans `.jsonl` transcripts across all main sessions and subagents in `%USERPROFILE%\.claude\projects\`, deduplicates streaming chunks by `message.id`, caches daily model buckets on disk (`cim-metrics-cache.v2.tsv`), and calculates estimated API costs in `USD` along with Prompt Cache savings.
 
 ---
 
@@ -314,15 +328,27 @@ The application uses Windows Presentation Foundation (WPF) powered by the Window
    * For each project in the package, CIM displays the original directory path and asks whether you want to map it to a different local directory on the current computer.
    * CIM rewrites all internal `cwd` path references, installs the transcripts and memories under `%USERPROFILE%\.claude\projects\<encoded-path>`, and grants `bypassPermissions` on the mapped folder.
 
-#### 5.6. Configure the `claude://` Protocol Router
-1. Select the **claude:// Router and Config Sync** tab.
+#### 5.6. Analyze Token Usage and USD Costs (FinOps Metrics)
+1. Select the **Metrics and Costs (USD)** tab.
+2. Select a **Period** (*Last 30 days*, *Last 7 days*, *Today*, *This Month*, *All History*, or *Custom Dates* in `yyyy-MM-dd` format).
+3. Filter by **Instance**, **Project**, and **Model**, and toggle **Include Subagents** to include or exclude subagent token consumption.
+4. Review the four summary KPI cards:
+   * **Estimated API Cost (USD):** Total estimated cost in US dollars based on per-million token model rates, alongside the uncached baseline value.
+   * **Prompt Cache Savings:** Dollar amount saved via cache reads (`0.10x` base input rate) and the overall `Cache Hit Rate` percentage.
+   * **Total Tokens Processed:** Combined input, cache write, cache read, and output/thinking tokens.
+   * **API Requests / Turns:** Total deduplicated API message turns.
+5. Switch across the five breakdown views: **By Project**, **By Model**, **Daily Timeline**, **By Instance**, and **Top 100 Sessions**.
+6. Click **Export HTML + CSV** and choose a destination folder to generate a standalone Executive HTML report and a CSV file for Excel or Power BI.
+
+#### 5.7. Configure the `claude://` Protocol Router
+1. Select the **claude:// Router and Sync** tab.
 2. Select the routing mode:
    * **Display instance selector popup when claude:// is clicked (Recommended):** Opens a topmost selector window whenever a `claude://` link is invoked.
    * **Always route directly to the pinned instance:** Sends all `claude://` links to the specified instance.
 3. Click **Enable / Save claude:// Router**.
 4. To restore the default Windows protocol handler, click **Restore Windows Default**.
 
-#### 5.7. Configure Auto-Update Policy and Dispatch Mode
+#### 5.8. Configure Auto-Update Policy and Dispatch Mode
 1. Select the **Updates, Protections, and Backups** tab.
 2. Select **Download updates in background, do NOT auto-restart (Recommended)**.
 3. Click **Apply Update Policy and Enforce 1p Mode**.

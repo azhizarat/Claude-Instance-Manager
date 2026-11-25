@@ -6,7 +6,7 @@ $script:CIMRootDir = Join-Path $env:LOCALAPPDATA "Claude-Instances"
 $script:CIMStateFile = Join-Path $script:CIMRootDir "cim-state.json"
 $script:CIMIconsDir = Join-Path $script:CIMRootDir "icons"
 $script:CIMBackupsDir = Join-Path $script:CIMRootDir "Backups"
-$script:CIMNativeDllPath = Join-Path $script:CIMRootDir "CIMNative.v4.dll"
+$script:CIMNativeDllPath = Join-Path $script:CIMRootDir "CIMNative.v7.dll"
 $script:ReservedFolderNames = @("icons", "Backups", "Manager", "logs", "temp")
 $script:CachedClaudeExePath = $null
 $script:PidCommandLineCache = @{}
@@ -20,13 +20,13 @@ function Initialize-CIMDirectories {
 }
 
 function Initialize-CIMNativeEngine {
-    if ("CIMNative.FastSessionScanner" -as [type]) { return }
+    if ("CIMNative.FastMetricsScanner" -as [type]) { return }
     Initialize-CIMDirectories
 
     if (Test-Path $script:CIMNativeDllPath) {
         try {
             Add-Type -Path $script:CIMNativeDllPath -ErrorAction Stop
-            if ("CIMNative.FastSessionScanner" -as [type]) { return }
+            if ("CIMNative.FastMetricsScanner" -as [type]) { return }
         } catch {}
     }
 
@@ -285,6 +285,329 @@ namespace CIMNative {
                 }
             }
             return list;
+        }
+    }
+
+    public class TurnUsageRecord {
+        public string MsgId;
+        public string CliSessionId;
+        public string EncodedProjectDir;
+        public string Cwd;
+        public bool IsSubagent;
+        public string DateLocal;
+        public string TimestampIso;
+        public string Model;
+        public int TurnCount;
+        public long InputTokens;
+        public long OutputTokens;
+        public long ThinkingTokens;
+        public long CacheReadTokens;
+        public long CacheWriteTokens;
+    }
+
+    internal class CachedJsonlFile {
+        public long LastWriteTicks;
+        public long FileLength;
+        public List<TurnUsageRecord> Records;
+    }
+
+    public static class FastMetricsScanner {
+        private static readonly Dictionary<string, CachedJsonlFile> FileCache = new Dictionary<string, CachedJsonlFile>(StringComparer.OrdinalIgnoreCase);
+        private static bool DiskCacheLoaded = false;
+
+        private static readonly Regex RxMsgId = new Regex("\"id\"\\s*:\\s*\"(msg_[^\"]+)\"", RegexOptions.Compiled);
+        private static readonly Regex RxUuid = new Regex("\"uuid\"\\s*:\\s*\"([^\"]+)\"", RegexOptions.Compiled);
+        private static readonly Regex RxTimestamp = new Regex("\"timestamp\"\\s*:\\s*\"([^\"]+)\"", RegexOptions.Compiled);
+        private static readonly Regex RxModel = new Regex("\"model\"\\s*:\\s*\"([^\"]+)\"", RegexOptions.Compiled);
+        private static readonly Regex RxCwd = new Regex("\"cwd\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"", RegexOptions.Compiled);
+
+        private static readonly Regex RxInTok = new Regex("\"input_tokens\"\\s*:\\s*(\\d+)", RegexOptions.Compiled);
+        private static readonly Regex RxOutTok = new Regex("\"output_tokens\"\\s*:\\s*(\\d+)", RegexOptions.Compiled);
+        private static readonly Regex RxThinkTok = new Regex("\"thinking_tokens\"\\s*:\\s*(\\d+)", RegexOptions.Compiled);
+        private static readonly Regex RxCacheRead = new Regex("\"cache_read_input_tokens\"\\s*:\\s*(\\d+)", RegexOptions.Compiled);
+        private static readonly Regex RxCacheCreate = new Regex("\"cache_creation_input_tokens\"\\s*:\\s*(\\d+)", RegexOptions.Compiled);
+
+        private static string GetDiskCachePath() {
+            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Claude-Instances");
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            return Path.Combine(dir, "cim-metrics-cache.v2.tsv");
+        }
+
+        private static void LoadDiskCacheIfNeeded() {
+            if (DiskCacheLoaded) return;
+            DiskCacheLoaded = true;
+            string cachePath = GetDiskCachePath();
+            if (!File.Exists(cachePath)) return;
+            try {
+                CachedJsonlFile currentFile = null;
+                foreach (string line in File.ReadLines(cachePath, Encoding.UTF8)) {
+                    if (string.IsNullOrEmpty(line)) continue;
+                    if (line.StartsWith("F\t", StringComparison.Ordinal)) {
+                        string[] parts = line.Split('\t');
+                        if (parts.Length >= 4) {
+                            long ticks = 0, len = 0;
+                            long.TryParse(parts[2], out ticks);
+                            long.TryParse(parts[3], out len);
+                            currentFile = new CachedJsonlFile {
+                                LastWriteTicks = ticks,
+                                FileLength = len,
+                                Records = new List<TurnUsageRecord>()
+                            };
+                            FileCache[parts[1]] = currentFile;
+                        }
+                    } else if (line.StartsWith("B\t", StringComparison.Ordinal) && currentFile != null) {
+                        string[] parts = line.Split('\t');
+                        if (parts.Length >= 13) {
+                            int tCount = 1;
+                            int.TryParse(parts[1], out tCount);
+                            long inT = 0, outT = 0, thT = 0, crT = 0, cwT = 0;
+                            long.TryParse(parts[8], out inT);
+                            long.TryParse(parts[9], out outT);
+                            long.TryParse(parts[10], out thT);
+                            long.TryParse(parts[11], out crT);
+                            long.TryParse(parts[12], out cwT);
+                            currentFile.Records.Add(new TurnUsageRecord {
+                                TurnCount = tCount,
+                                CliSessionId = parts[2],
+                                EncodedProjectDir = parts[3],
+                                Cwd = parts[4],
+                                IsSubagent = parts[5] == "1",
+                                DateLocal = parts[6],
+                                Model = parts[7],
+                                InputTokens = inT,
+                                OutputTokens = outT,
+                                ThinkingTokens = thT,
+                                CacheReadTokens = crT,
+                                CacheWriteTokens = cwT
+                            });
+                        }
+                    }
+                }
+            } catch {}
+        }
+
+        private static void SaveDiskCache() {
+            try {
+                string cachePath = GetDiskCachePath();
+                using (var sw = new StreamWriter(cachePath, false, Encoding.UTF8)) {
+                    foreach (var kv in FileCache) {
+                        sw.Write("F\t");
+                        sw.Write(kv.Key);
+                        sw.Write('\t');
+                        sw.Write(kv.Value.LastWriteTicks);
+                        sw.Write('\t');
+                        sw.WriteLine(kv.Value.FileLength);
+                        foreach (var r in kv.Value.Records) {
+                            sw.Write("B\t");
+                            sw.Write(r.TurnCount); sw.Write('\t');
+                            sw.Write(r.CliSessionId ?? ""); sw.Write('\t');
+                            sw.Write(r.EncodedProjectDir ?? ""); sw.Write('\t');
+                            sw.Write((r.Cwd ?? "").Replace("\t", " ")); sw.Write('\t');
+                            sw.Write(r.IsSubagent ? "1" : "0"); sw.Write('\t');
+                            sw.Write(r.DateLocal ?? ""); sw.Write('\t');
+                            sw.Write(r.Model ?? ""); sw.Write('\t');
+                            sw.Write(r.InputTokens); sw.Write('\t');
+                            sw.Write(r.OutputTokens); sw.Write('\t');
+                            sw.Write(r.ThinkingTokens); sw.Write('\t');
+                            sw.Write(r.CacheReadTokens); sw.Write('\t');
+                            sw.WriteLine(r.CacheWriteTokens);
+                        }
+                    }
+                }
+            } catch {}
+        }
+
+        private static long ExtractFirstLong(Regex rx, string text) {
+            var m = rx.Match(text);
+            if (!m.Success) return 0;
+            long v = 0;
+            long.TryParse(m.Groups[1].Value, out v);
+            return v;
+        }
+
+        private static long SumAllLongs(Regex rx, string text) {
+            long sum = 0;
+            foreach (Match m in rx.Matches(text)) {
+                long v = 0;
+                if (long.TryParse(m.Groups[1].Value, out v)) sum += v;
+            }
+            return sum;
+        }
+
+        public static List<TurnUsageRecord> ScanAllProjects(string claudeProjectsRoot) {
+            var allRecords = new List<TurnUsageRecord>();
+            if (string.IsNullOrEmpty(claudeProjectsRoot) || !Directory.Exists(claudeProjectsRoot)) return allRecords;
+
+            LoadDiskCacheIfNeeded();
+            bool cacheDirty = false;
+
+            foreach (string projDir in Directory.EnumerateDirectories(claudeProjectsRoot)) {
+                string encodedProjName = Path.GetFileName(projDir);
+                foreach (string jsonlFile in Directory.EnumerateFiles(projDir, "*.jsonl", SearchOption.AllDirectories)) {
+                    try {
+                        var fi = new FileInfo(jsonlFile);
+                        CachedJsonlFile cached;
+                        if (FileCache.TryGetValue(jsonlFile, out cached)) {
+                            if (cached.LastWriteTicks == fi.LastWriteTimeUtc.Ticks && cached.FileLength == fi.Length) {
+                                allRecords.AddRange(cached.Records);
+                                continue;
+                            }
+                        }
+
+                        var fileRecords = ParseJsonlFile(jsonlFile, encodedProjName, projDir);
+                        FileCache[jsonlFile] = new CachedJsonlFile {
+                            LastWriteTicks = fi.LastWriteTimeUtc.Ticks,
+                            FileLength = fi.Length,
+                            Records = fileRecords
+                        };
+                        cacheDirty = true;
+                        allRecords.AddRange(fileRecords);
+                    } catch {}
+                }
+            }
+
+            if (cacheDirty) {
+                SaveDiskCache();
+            }
+            return allRecords;
+        }
+
+        private static List<TurnUsageRecord> ParseJsonlFile(string filePath, string encodedProjName, string projRootDir) {
+            string fileNameNoExt = Path.GetFileNameWithoutExtension(filePath);
+            bool isSubagent = fileNameNoExt.StartsWith("agent-", StringComparison.OrdinalIgnoreCase) ||
+                              filePath.IndexOf("\\subagents\\", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            string cliSessionId = fileNameNoExt;
+            if (isSubagent) {
+                var dir = Directory.GetParent(filePath);
+                if (dir != null && dir.Name.Equals("subagents", StringComparison.OrdinalIgnoreCase) && dir.Parent != null) {
+                    cliSessionId = dir.Parent.Name;
+                }
+            }
+
+            var byMsgId = new Dictionary<string, TurnUsageRecord>(StringComparer.Ordinal);
+            string detectedCwd = "";
+            int lineNum = 0;
+
+            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 65536))
+            using (var sr = new StreamReader(fs, Encoding.UTF8, true, 65536)) {
+                string line;
+                while ((line = sr.ReadLine()) != null) {
+                    lineNum++;
+                    string head = line.Length > 1200 ? line.Substring(0, 1200) : line;
+
+                    if (string.IsNullOrEmpty(detectedCwd) && head.IndexOf("\"cwd\":", StringComparison.Ordinal) >= 0) {
+                        var mCwd = RxCwd.Match(head);
+                        if (mCwd.Success) {
+                            try { detectedCwd = Regex.Unescape(mCwd.Groups[1].Value); } catch { detectedCwd = mCwd.Groups[1].Value; }
+                        }
+                    }
+
+                    int usageIdx = line.LastIndexOf("\"usage\":", StringComparison.Ordinal);
+                    if (usageIdx < 0) continue;
+
+                    string tail = line.Substring(Math.Max(0, usageIdx - 250));
+                    string metaZone = head + "\n" + tail;
+
+                    string msgId = "";
+                    var mId = RxMsgId.Match(metaZone);
+                    if (mId.Success) {
+                        msgId = mId.Groups[1].Value;
+                    } else {
+                        var mUuid = RxUuid.Match(metaZone);
+                        msgId = mUuid.Success ? mUuid.Groups[1].Value : ("line_" + lineNum);
+                    }
+
+                    string model = "unknown";
+                    var mMod = RxModel.Match(metaZone);
+                    if (mMod.Success) model = mMod.Groups[1].Value;
+                    if (model.StartsWith("<synthetic>", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    string tsIso = "";
+                    string dateLocal = "";
+                    var mTs = RxTimestamp.Match(metaZone);
+                    if (mTs.Success) {
+                        tsIso = mTs.Groups[1].Value;
+                        DateTimeOffset dto;
+                        if (DateTimeOffset.TryParse(tsIso, out dto)) {
+                            dateLocal = dto.LocalDateTime.ToString("yyyy-MM-dd");
+                        }
+                    }
+                    if (string.IsNullOrEmpty(dateLocal)) {
+                        dateLocal = File.GetLastWriteTime(filePath).ToString("yyyy-MM-dd");
+                    }
+
+                    string usageSegment = line.Substring(usageIdx);
+                    int iterIdx = usageSegment.IndexOf("\"iterations\":", StringComparison.Ordinal);
+                    string topUsage = iterIdx > 0 ? usageSegment.Substring(0, iterIdx) : usageSegment;
+
+                    long inTok = ExtractFirstLong(RxInTok, topUsage);
+                    long outTok = ExtractFirstLong(RxOutTok, topUsage);
+                    long thinkTok = ExtractFirstLong(RxThinkTok, topUsage);
+                    long cRead = ExtractFirstLong(RxCacheRead, topUsage);
+                    long cWrite = ExtractFirstLong(RxCacheCreate, topUsage);
+
+                    if ((inTok + outTok + cRead + cWrite) == 0 && iterIdx > 0) {
+                        string iterSegment = usageSegment.Substring(iterIdx);
+                        inTok = SumAllLongs(RxInTok, iterSegment);
+                        outTok = SumAllLongs(RxOutTok, iterSegment);
+                        cRead = SumAllLongs(RxCacheRead, iterSegment);
+                        cWrite = SumAllLongs(RxCacheCreate, iterSegment);
+                    }
+
+                    long total = inTok + outTok + cRead + cWrite;
+                    if (total <= 0) continue;
+
+                    TurnUsageRecord existing;
+                    if (byMsgId.TryGetValue(msgId, out existing)) {
+                        long prevTotal = existing.InputTokens + existing.OutputTokens + existing.CacheReadTokens + existing.CacheWriteTokens;
+                        if (total >= prevTotal) {
+                            existing.InputTokens = inTok;
+                            existing.OutputTokens = outTok;
+                            existing.ThinkingTokens = Math.Max(existing.ThinkingTokens, thinkTok);
+                            existing.CacheReadTokens = cRead;
+                            existing.CacheWriteTokens = cWrite;
+                            if (!string.IsNullOrEmpty(detectedCwd)) existing.Cwd = detectedCwd;
+                        }
+                    } else {
+                        byMsgId[msgId] = new TurnUsageRecord {
+                            MsgId = msgId,
+                            CliSessionId = cliSessionId,
+                            EncodedProjectDir = encodedProjName,
+                            Cwd = detectedCwd,
+                            IsSubagent = isSubagent,
+                            DateLocal = dateLocal,
+                            TimestampIso = tsIso,
+                            Model = model,
+                            InputTokens = inTok,
+                            OutputTokens = outTok,
+                            ThinkingTokens = thinkTok,
+                            CacheReadTokens = cRead,
+                            CacheWriteTokens = cWrite
+                        };
+                    }
+                }
+            }
+
+            // Collapse deduplicated turns by DateLocal + Model inside C# so PowerShell receives ~1,500 buckets instead of 200,000 objects
+            var buckets = new Dictionary<string, TurnUsageRecord>(StringComparer.Ordinal);
+            foreach (var r in byMsgId.Values) {
+                if (string.IsNullOrEmpty(r.Cwd) && !string.IsNullOrEmpty(detectedCwd)) r.Cwd = detectedCwd;
+                string bKey = (r.DateLocal ?? "") + "|" + (r.Model ?? "");
+                TurnUsageRecord b;
+                if (buckets.TryGetValue(bKey, out b)) {
+                    b.TurnCount += 1;
+                    b.InputTokens += r.InputTokens;
+                    b.OutputTokens += r.OutputTokens;
+                    b.ThinkingTokens += r.ThinkingTokens;
+                    b.CacheReadTokens += r.CacheReadTokens;
+                    b.CacheWriteTokens += r.CacheWriteTokens;
+                } else {
+                    r.TurnCount = 1;
+                    buckets[bKey] = r;
+                }
+            }
+            return new List<TurnUsageRecord>(buckets.Values);
         }
     }
 }

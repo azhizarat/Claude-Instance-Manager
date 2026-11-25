@@ -12,17 +12,19 @@ Add-Type -AssemblyName System.Windows.Forms
 $SrcDir = Join-Path $PSScriptRoot "src"
 . (Join-Path $SrcDir "Core-Instances.ps1")
 . (Join-Path $SrcDir "Core-Sessions.ps1")
+. (Join-Path $SrcDir "Core-Metrics.ps1")
 . (Join-Path $SrcDir "Core-ProtocolRouter.ps1")
 . (Join-Path $SrcDir "Core-SettingsBackup.ps1")
 
 $script:I18N = @{
     "pt-BR" = @{
-        Subtitle              = "Gerenciador Multi-Instância, Migração Portátil (.cimpack), Roteador claude:// e Controle de Updates"
+        Subtitle              = "Gerenciador Multi-Instância, Migração Portátil (.cimpack), FinOps de Tokens e Roteador claude://"
         BtnRefreshAll         = "Atualizar Tudo"
         TabInstances          = "Instâncias e Contas"
-        TabSessions           = "Projetos, Sessões e Pacotes (.cimpack)"
-        TabProtocol           = "Roteador claude:// e Sincronização"
-        TabSettings           = "Atualizações, Proteções e Backups"
+        TabSessions           = "Projetos e Pacotes (.cimpack)"
+        TabMetrics            = "Métricas e Custos (USD)"
+        TabProtocol           = "Roteador claude:// e Sync"
+        TabSettings           = "Atualizações e Backups"
         LblInstalledInstances = "Instâncias Instaladas"
         BtnSyncAllLinks       = "Reparar Hardlinks de Todas"
         FormTitleNew          = "Criar Nova Instância"
@@ -68,6 +70,36 @@ $script:I18N = @{
         TxtTransferNote       = "O pacote .cimpack inclui histórico completo do Code (.jsonl), subagents, memórias, notas e versão HTML/Markdown legível."
         LblDstInstance        = "2. Instância de Destino (Local ou Importação)"
         LblDstSummary         = "Sessões na instância de destino"
+        # Tab 3: Metrics
+        LblMetPeriod          = "Período:"
+        LblMetFrom            = "De:"
+        LblMetTo              = "Até:"
+        LblMetInstance        = "Instância:"
+        LblMetProject         = "Projeto:"
+        LblMetModel           = "Modelo:"
+        ChkMetSubagents       = "Incluir Subagentes"
+        BtnMetApply           = "Filtrar"
+        BtnMetExport          = "Exportar HTML + CSV"
+        BtnMetPricing         = "Tabela USD/1M"
+        Period30d             = "Últimos 30 dias"
+        Period7d              = "Últimos 7 dias"
+        PeriodToday           = "Hoje"
+        PeriodMonth           = "Este Mês"
+        PeriodAll             = "Todo o Histórico"
+        PeriodCustom          = "Datas Personalizadas"
+        FilterAllInstances    = "Todas as Instâncias"
+        FilterAllProjects     = "Todos os Projetos"
+        FilterAllModels       = "Todos os Modelos"
+        KpiCostTitle          = "CUSTO EQUIVALENTE API (USD)"
+        KpiSavingsTitle       = "ECONOMIA DO PROMPT CACHE"
+        KpiTokensTitle        = "TOTAL DE TOKENS PROCESSADOS"
+        KpiTurnsTitle         = "REQUISIÇÕES / TURNOS DA API"
+        SubTabByProject       = "Ranking por Projeto"
+        SubTabByModel         = "Consumo por Modelo"
+        SubTabByDay           = "Série Diária"
+        SubTabByInstance      = "Por Instância"
+        SubTabBySession       = "Top 100 Conversas"
+        # Tab 4 & 5
         LblProtoTitle         = "Interceptador e Roteador do Protocolo claude://"
         LblProtoDesc          = "Quando o navegador executa a autenticação OAuth ou ativa um conector, o sistema operacional aciona uma URI claude://. Com o interceptador ativo, o CIM direciona o link para a instância desejada."
         LblProtoBehavior      = "Comportamento ao receber um link claude://:"
@@ -111,12 +143,13 @@ $script:I18N = @{
         MsgReady              = "Pronto."
     }
     "en-US" = @{
-        Subtitle              = "Multi-Instance Manager, Portable Pack (.cimpack), claude:// Router, and Update Controller"
+        Subtitle              = "Multi-Instance Manager, Portable Pack (.cimpack), Token FinOps, and claude:// Router"
         BtnRefreshAll         = "Refresh All"
         TabInstances          = "Instances and Accounts"
-        TabSessions           = "Projects, Sessions, and Packages (.cimpack)"
-        TabProtocol           = "claude:// Router and Config Sync"
-        TabSettings           = "Updates, Protections, and Backups"
+        TabSessions           = "Projects and Packages (.cimpack)"
+        TabMetrics            = "Metrics and Costs (USD)"
+        TabProtocol           = "claude:// Router and Sync"
+        TabSettings           = "Updates and Backups"
         LblInstalledInstances = "Installed Instances"
         BtnSyncAllLinks       = "Repair All Hardlinks"
         FormTitleNew          = "Create New Instance"
@@ -162,6 +195,36 @@ $script:I18N = @{
         TxtTransferNote       = "A .cimpack archive bundles full Code transcripts (.jsonl), subagents, memories, notes, and readable HTML/Markdown files."
         LblDstInstance        = "2. Target Instance (Local or Import)"
         LblDstSummary         = "Sessions in target instance"
+        # Tab 3: Metrics
+        LblMetPeriod          = "Period:"
+        LblMetFrom            = "From:"
+        LblMetTo              = "To:"
+        LblMetInstance        = "Instance:"
+        LblMetProject         = "Project:"
+        LblMetModel           = "Model:"
+        ChkMetSubagents       = "Include Subagents"
+        BtnMetApply           = "Apply Filter"
+        BtnMetExport          = "Export HTML + CSV"
+        BtnMetPricing         = "USD/1M Rates"
+        Period30d             = "Last 30 days"
+        Period7d              = "Last 7 days"
+        PeriodToday           = "Today"
+        PeriodMonth           = "This Month"
+        PeriodAll             = "All History"
+        PeriodCustom          = "Custom Dates"
+        FilterAllInstances    = "All Instances"
+        FilterAllProjects     = "All Projects"
+        FilterAllModels       = "All Models"
+        KpiCostTitle          = "ESTIMATED API COST (USD)"
+        KpiSavingsTitle       = "PROMPT CACHE SAVINGS"
+        KpiTokensTitle        = "TOTAL TOKENS PROCESSED"
+        KpiTurnsTitle         = "API REQUESTS / TURNS"
+        SubTabByProject       = "By Project"
+        SubTabByModel         = "By Model"
+        SubTabByDay           = "Daily Timeline"
+        SubTabByInstance      = "By Instance"
+        SubTabBySession       = "Top 100 Sessions"
+        # Tab 4 & 5
         LblProtoTitle         = "claude:// Protocol Interceptor and Router"
         LblProtoDesc          = "When the browser completes OAuth login or connector authentication, Windows invokes a claude:// URI. When active, CIM routes the URI to the selected instance."
         LblProtoBehavior      = "Action when a claude:// URI is triggered:"
@@ -209,6 +272,8 @@ $script:I18N = @{
 $initState = Get-CIMState
 $script:CurrentLang = if ($initState.language -and $script:I18N.ContainsKey($initState.language)) { [string]$initState.language } else { "pt-BR" }
 $script:IsEditingExisting = $false
+$script:MetricsInitialized = $false
+$script:CurrentMetricsReport = $null
 
 function T([string]$Key) {
     $dict = $script:I18N[$script:CurrentLang]
@@ -220,7 +285,7 @@ function T([string]$Key) {
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Claude Instance Manager (CIM)"
-        Width="1180" Height="790" MinWidth="1000" MinHeight="660"
+        Width="1220" Height="810" MinWidth="1020" MinHeight="680"
         WindowStartupLocation="CenterScreen"
         Background="#0F0F12" Foreground="#F4F4F5"
         FontFamily="Segoe UI">
@@ -272,10 +337,34 @@ function T([string]$Key) {
             <Setter Property="Margin" Value="0,5,0,5"/>
         </Style>
 
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="#09090B"/>
+            <Setter Property="Foreground" Value="#F4F4F5"/>
+            <Setter Property="BorderBrush" Value="#27272A"/>
+            <Setter Property="RowBackground" Value="#141418"/>
+            <Setter Property="AlternatingRowBackground" Value="#18181B"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="#27272A"/>
+            <Setter Property="VerticalGridLinesBrush" Value="#27272A"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="AutoGenerateColumns" Value="True"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#27272A"/>
+            <Setter Property="Foreground" Value="#E4E4E7"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="BorderBrush" Value="#3F3F46"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+        </Style>
+
         <Style TargetType="TabItem">
             <Setter Property="Background" Value="#18181B"/>
             <Setter Property="Foreground" Value="#A1A1AA"/>
-            <Setter Property="Padding" Value="16,10"/>
+            <Setter Property="Padding" Value="15,10"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Template">
@@ -331,7 +420,7 @@ function T([string]$Key) {
         </Border>
 
         <!-- Main Tabs -->
-        <TabControl Grid.Row="1" Background="#141418" BorderBrush="#27272A" BorderThickness="1" Padding="14">
+        <TabControl x:Name="MainTabControl" Grid.Row="1" Background="#141418" BorderBrush="#27272A" BorderThickness="1" Padding="14">
 
             <!-- TAB 1: INSTANCES & ACCOUNTS -->
             <TabItem x:Name="TabInstances" Header="Instances">
@@ -408,7 +497,6 @@ function T([string]$Key) {
                         <ColumnDefinition Width="1*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Source Column -->
                     <Border Grid.Column="0" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="10" Padding="14">
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
@@ -429,7 +517,6 @@ function T([string]$Key) {
                         </DockPanel>
                     </Border>
 
-                    <!-- Center Transfer & Portable Pack Controls -->
                     <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Margin="12,0">
                         <StackPanel VerticalAlignment="Center">
                             <Border Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,12">
@@ -457,7 +544,6 @@ function T([string]$Key) {
                         </StackPanel>
                     </ScrollViewer>
 
-                    <!-- Target Column -->
                     <Border Grid.Column="2" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="10" Padding="14">
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
@@ -471,7 +557,115 @@ function T([string]$Key) {
                 </Grid>
             </TabItem>
 
-            <!-- TAB 3: CLAUDE:// PROTOCOL ROUTER & CONFIG SYNC -->
+            <!-- TAB 3: METRICS, TOKEN USAGE & USD COSTS -->
+            <TabItem x:Name="TabMetrics" Header="Metrics">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Row 0: Filter Bar -->
+                    <Border Grid.Row="0" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,0,0,12">
+                        <WrapPanel VerticalAlignment="Center">
+                            <TextBlock x:Name="LblMetPeriod" Text="Period:" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="0,0,6,4"/>
+                            <ComboBox x:Name="CmbMetricsPeriod" Width="145" Height="28" Margin="0,0,10,4" VerticalContentAlignment="Center">
+                                <ComboBoxItem x:Name="CiPeriod30d" Content="Last 30 days" Tag="30d" IsSelected="True"/>
+                                <ComboBoxItem x:Name="CiPeriod7d" Content="Last 7 days" Tag="7d"/>
+                                <ComboBoxItem x:Name="CiPeriodToday" Content="Today" Tag="today"/>
+                                <ComboBoxItem x:Name="CiPeriodMonth" Content="This Month" Tag="month"/>
+                                <ComboBoxItem x:Name="CiPeriodAll" Content="All History" Tag="all"/>
+                                <ComboBoxItem x:Name="CiPeriodCustom" Content="Custom Dates" Tag="custom"/>
+                            </ComboBox>
+
+                            <TextBlock x:Name="LblMetFrom" Text="From:" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="0,0,4,4"/>
+                            <TextBox x:Name="TxtMetricsStartDate" Width="88" Height="28" Margin="0,0,8,4" ToolTip="yyyy-MM-dd"/>
+
+                            <TextBlock x:Name="LblMetTo" Text="To:" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="0,0,4,4"/>
+                            <TextBox x:Name="TxtMetricsEndDate" Width="88" Height="28" Margin="0,0,12,4" ToolTip="yyyy-MM-dd"/>
+
+                            <TextBlock x:Name="LblMetInstance" Text="Instance:" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="0,0,4,4"/>
+                            <ComboBox x:Name="CmbMetricsInstance" Width="135" Height="28" Margin="0,0,10,4" VerticalContentAlignment="Center"/>
+
+                            <TextBlock x:Name="LblMetProject" Text="Project:" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="0,0,4,4"/>
+                            <ComboBox x:Name="CmbMetricsProject" Width="150" Height="28" Margin="0,0,10,4" VerticalContentAlignment="Center"/>
+
+                            <TextBlock x:Name="LblMetModel" Text="Model:" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="0,0,4,4"/>
+                            <ComboBox x:Name="CmbMetricsModel" Width="145" Height="28" Margin="0,0,12,4" VerticalContentAlignment="Center"/>
+
+                            <CheckBox x:Name="ChkMetricsSubagents" Content="Include Subagents" IsChecked="True" VerticalAlignment="Center" Margin="0,0,12,4"/>
+
+                            <Button x:Name="BtnApplyMetrics" Content="Filter" Background="#D97757" BorderBrush="#D97757" Foreground="White" Padding="12,5" Margin="0,0,8,4"/>
+                            <Button x:Name="BtnExportMetrics" Content="Export HTML + CSV" Background="#065F46" BorderBrush="#059669" Foreground="White" Padding="10,5" Margin="0,0,8,4"/>
+                            <Button x:Name="BtnEditPricing" Content="USD/1M Rates" Padding="10,5" Margin="0,0,0,4"/>
+                        </WrapPanel>
+                    </Border>
+
+                    <!-- Row 1: 4 Executive KPI Cards -->
+                    <Grid Grid.Row="1" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Background="#18181B" BorderBrush="#D97757" BorderThickness="3,1,1,1" CornerRadius="10" Padding="14,10" Margin="0,0,10,0">
+                            <StackPanel>
+                                <TextBlock x:Name="LblKpiCost" Text="ESTIMATED API COST (USD)" Foreground="#A1A1AA" FontSize="11" FontWeight="Bold"/>
+                                <TextBlock x:Name="TxtKpiCostVal" Text="$0.00" Foreground="#D97757" FontSize="22" FontWeight="Bold" Margin="0,4,0,2"/>
+                                <TextBlock x:Name="TxtKpiCostSub" Text="Without Cache: $0.00" Foreground="#71717A" FontSize="11"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="1" Background="#18181B" BorderBrush="#10B981" BorderThickness="3,1,1,1" CornerRadius="10" Padding="14,10" Margin="0,0,10,0">
+                            <StackPanel>
+                                <TextBlock x:Name="LblKpiSavings" Text="PROMPT CACHE SAVINGS" Foreground="#A1A1AA" FontSize="11" FontWeight="Bold"/>
+                                <TextBlock x:Name="TxtKpiSavingsVal" Text="$0.00" Foreground="#10B981" FontSize="22" FontWeight="Bold" Margin="0,4,0,2"/>
+                                <TextBlock x:Name="TxtKpiSavingsSub" Text="Cache Hit Rate: 0%" Foreground="#71717A" FontSize="11"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="2" Background="#18181B" BorderBrush="#2563EB" BorderThickness="3,1,1,1" CornerRadius="10" Padding="14,10" Margin="0,0,10,0">
+                            <StackPanel>
+                                <TextBlock x:Name="LblKpiTokens" Text="TOTAL TOKENS PROCESSED" Foreground="#A1A1AA" FontSize="11" FontWeight="Bold"/>
+                                <TextBlock x:Name="TxtKpiTokensVal" Text="0" Foreground="#60A5FA" FontSize="22" FontWeight="Bold" Margin="0,4,0,2"/>
+                                <TextBlock x:Name="TxtKpiTokensSub" Text="Out: 0 | Cache Read: 0" Foreground="#71717A" FontSize="11"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="3" Background="#18181B" BorderBrush="#7C3AED" BorderThickness="3,1,1,1" CornerRadius="10" Padding="14,10">
+                            <StackPanel>
+                                <TextBlock x:Name="LblKpiTurns" Text="API REQUESTS / TURNS" Foreground="#A1A1AA" FontSize="11" FontWeight="Bold"/>
+                                <TextBlock x:Name="TxtKpiTurnsVal" Text="0" Foreground="#F4F4F5" FontSize="22" FontWeight="Bold" Margin="0,4,0,2"/>
+                                <TextBlock x:Name="TxtKpiTurnsSub" Text="Subagents: 0" Foreground="#71717A" FontSize="11"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- Row 2: Breakdown Sub-Tabs -->
+                    <TabControl Grid.Row="2" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" Padding="8">
+                        <TabItem x:Name="SubTabByProject" Header="By Project">
+                            <DataGrid x:Name="DgMetricsProjects" />
+                        </TabItem>
+                        <TabItem x:Name="SubTabByModel" Header="By Model">
+                            <DataGrid x:Name="DgMetricsModels" />
+                        </TabItem>
+                        <TabItem x:Name="SubTabByDay" Header="Daily Timeline">
+                            <DataGrid x:Name="DgMetricsDays" FontFamily="Consolas, Segoe UI" />
+                        </TabItem>
+                        <TabItem x:Name="SubTabByInstance" Header="By Instance">
+                            <DataGrid x:Name="DgMetricsInstances" />
+                        </TabItem>
+                        <TabItem x:Name="SubTabBySession" Header="Top 100 Sessions">
+                            <DataGrid x:Name="DgMetricsSessions" />
+                        </TabItem>
+                    </TabControl>
+                </Grid>
+            </TabItem>
+
+            <!-- TAB 4: CLAUDE:// PROTOCOL ROUTER & CONFIG SYNC -->
             <TabItem x:Name="TabProtocol" Header="Protocol">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -539,7 +733,7 @@ function T([string]$Key) {
                 </Grid>
             </TabItem>
 
-            <!-- TAB 4: UPDATES, ANTI-GATEWAY & BACKUPS -->
+            <!-- TAB 5: UPDATES, ANTI-GATEWAY & BACKUPS -->
             <TabItem x:Name="TabSettings" Header="Settings">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -609,6 +803,7 @@ if ($CheckOnly) {
 }
 
 # --- Bind Controls ---
+$MainTabControl        = $Window.FindName("MainTabControl")
 $TxtStatusBar          = $Window.FindName("TxtStatusBar")
 $BadgeProtoHeader      = $Window.FindName("BadgeProtoHeader")
 $TxtProtoHeader        = $Window.FindName("TxtProtoHeader")
@@ -650,7 +845,33 @@ $ChkPackWorkspace      = $Window.FindName("ChkPackWorkspace")
 $BtnExportPack         = $Window.FindName("BtnExportPack")
 $BtnImportPack         = $Window.FindName("BtnImportPack")
 
-# Tab 3
+# Tab 3: Metrics
+$TabMetrics            = $Window.FindName("TabMetrics")
+$CmbMetricsPeriod      = $Window.FindName("CmbMetricsPeriod")
+$TxtMetricsStartDate   = $Window.FindName("TxtMetricsStartDate")
+$TxtMetricsEndDate     = $Window.FindName("TxtMetricsEndDate")
+$CmbMetricsInstance    = $Window.FindName("CmbMetricsInstance")
+$CmbMetricsProject     = $Window.FindName("CmbMetricsProject")
+$CmbMetricsModel       = $Window.FindName("CmbMetricsModel")
+$ChkMetricsSubagents   = $Window.FindName("ChkMetricsSubagents")
+$BtnApplyMetrics       = $Window.FindName("BtnApplyMetrics")
+$BtnExportMetrics      = $Window.FindName("BtnExportMetrics")
+$BtnEditPricing        = $Window.FindName("BtnEditPricing")
+$TxtKpiCostVal         = $Window.FindName("TxtKpiCostVal")
+$TxtKpiCostSub         = $Window.FindName("TxtKpiCostSub")
+$TxtKpiSavingsVal      = $Window.FindName("TxtKpiSavingsVal")
+$TxtKpiSavingsSub      = $Window.FindName("TxtKpiSavingsSub")
+$TxtKpiTokensVal       = $Window.FindName("TxtKpiTokensVal")
+$TxtKpiTokensSub       = $Window.FindName("TxtKpiTokensSub")
+$TxtKpiTurnsVal        = $Window.FindName("TxtKpiTurnsVal")
+$TxtKpiTurnsSub        = $Window.FindName("TxtKpiTurnsSub")
+$DgMetricsProjects     = $Window.FindName("DgMetricsProjects")
+$DgMetricsModels       = $Window.FindName("DgMetricsModels")
+$DgMetricsDays         = $Window.FindName("DgMetricsDays")
+$DgMetricsInstances    = $Window.FindName("DgMetricsInstances")
+$DgMetricsSessions     = $Window.FindName("DgMetricsSessions")
+
+# Tab 4
 $TxtProtoDetailStatus  = $Window.FindName("TxtProtoDetailStatus")
 $TxtProtoProgId        = $Window.FindName("TxtProtoProgId")
 $TxtProtoArmed         = $Window.FindName("TxtProtoArmed")
@@ -670,7 +891,7 @@ $ChkSyncPerms          = $Window.FindName("ChkSyncPerms")
 $ChkSyncPrefs          = $Window.FindName("ChkSyncPrefs")
 $BtnRunConfigSync      = $Window.FindName("BtnRunConfigSync")
 
-# Tab 4
+# Tab 5
 $TxtCurrentUpdatePolicy   = $Window.FindName("TxtCurrentUpdatePolicy")
 $TxtCurrentDeploymentMode = $Window.FindName("TxtCurrentDeploymentMode")
 $RbUpdateManualRestart    = $Window.FindName("RbUpdateManualRestart")
@@ -688,6 +909,9 @@ $script:CachedInstances = @()
 $script:CachedSourceSessions = @()
 $script:SuppressComboEvents = $false
 
+$TxtMetricsStartDate.Text = (Get-Date).AddDays(-29).ToString("yyyy-MM-dd")
+$TxtMetricsEndDate.Text   = (Get-Date).ToString("yyyy-MM-dd")
+
 function Set-Status([string]$Message) {
     $TxtStatusBar.Text = "[$(Get-Date -Format 'HH:mm:ss')] $Message"
 }
@@ -697,6 +921,7 @@ function Apply-Localization {
     $BtnRefreshAll.Content                        = T "BtnRefreshAll"
     $Window.FindName("TabInstances").Header       = T "TabInstances"
     $Window.FindName("TabSessions").Header        = T "TabSessions"
+    $Window.FindName("TabMetrics").Header         = T "TabMetrics"
     $Window.FindName("TabProtocol").Header        = T "TabProtocol"
     $Window.FindName("TabSettings").Header        = T "TabSettings"
     $Window.FindName("LblInstalledInstances").Text= T "LblInstalledInstances"
@@ -732,6 +957,33 @@ function Apply-Localization {
     $BtnImportPack.Content                        = T "BtnImportPack"
     $Window.FindName("TxtTransferNote").Text      = T "TxtTransferNote"
     $Window.FindName("LblDstInstance").Text       = T "LblDstInstance"
+    # Metrics Tab
+    $Window.FindName("LblMetPeriod").Text         = T "LblMetPeriod"
+    $Window.FindName("LblMetFrom").Text           = T "LblMetFrom"
+    $Window.FindName("LblMetTo").Text             = T "LblMetTo"
+    $Window.FindName("LblMetInstance").Text       = T "LblMetInstance"
+    $Window.FindName("LblMetProject").Text        = T "LblMetProject"
+    $Window.FindName("LblMetModel").Text          = T "LblMetModel"
+    $ChkMetricsSubagents.Content                  = T "ChkMetSubagents"
+    $BtnApplyMetrics.Content                      = T "BtnMetApply"
+    $BtnExportMetrics.Content                     = T "BtnMetExport"
+    $BtnEditPricing.Content                       = T "BtnMetPricing"
+    $Window.FindName("CiPeriod30d").Content       = T "Period30d"
+    $Window.FindName("CiPeriod7d").Content        = T "Period7d"
+    $Window.FindName("CiPeriodToday").Content     = T "PeriodToday"
+    $Window.FindName("CiPeriodMonth").Content     = T "PeriodMonth"
+    $Window.FindName("CiPeriodAll").Content       = T "PeriodAll"
+    $Window.FindName("CiPeriodCustom").Content    = T "PeriodCustom"
+    $Window.FindName("LblKpiCost").Text           = T "KpiCostTitle"
+    $Window.FindName("LblKpiSavings").Text        = T "KpiSavingsTitle"
+    $Window.FindName("LblKpiTokens").Text         = T "KpiTokensTitle"
+    $Window.FindName("LblKpiTurns").Text          = T "KpiTurnsTitle"
+    $Window.FindName("SubTabByProject").Header    = T "SubTabByProject"
+    $Window.FindName("SubTabByModel").Header      = T "SubTabByModel"
+    $Window.FindName("SubTabByDay").Header        = T "SubTabByDay"
+    $Window.FindName("SubTabByInstance").Header   = T "SubTabByInstance"
+    $Window.FindName("SubTabBySession").Header    = T "SubTabBySession"
+    # Tab 4 & 5
     $Window.FindName("LblProtoTitle").Text        = T "LblProtoTitle"
     $Window.FindName("LblProtoDesc").Text         = T "LblProtoDesc"
     $Window.FindName("LblProtoBehavior").Text     = T "LblProtoBehavior"
@@ -763,6 +1015,97 @@ function Apply-Localization {
     $Window.FindName("LblAvailableBackups").Text  = T "LblAvailableBackups"
     $BtnRestoreBackup.Content                     = T "BtnRestoreBackup"
     $BtnOpenBackupsFolder.Content                 = T "BtnOpenBackupDir"
+}
+
+function Initialize-MetricsFilterCombos([switch]$ForceRefresh) {
+    $CmbMetricsInstance.Items.Clear()
+    $allInstItem = New-Object System.Windows.Controls.ComboBoxItem
+    $allInstItem.Content = T "FilterAllInstances"
+    $allInstItem.Tag = "ALL"
+    [void]$CmbMetricsInstance.Items.Add($allInstItem)
+
+    foreach ($inst in $script:CachedInstances) {
+        $ci = New-Object System.Windows.Controls.ComboBoxItem
+        $ci.Content = "[$($inst.BadgeText)] $($inst.DisplayName)"
+        $ci.Tag = $inst.Id
+        [void]$CmbMetricsInstance.Items.Add($ci)
+    }
+    $cliItem = New-Object System.Windows.Controls.ComboBoxItem
+    $cliItem.Content = "CLI / Terminal"
+    $cliItem.Tag = "CLI"
+    [void]$CmbMetricsInstance.Items.Add($cliItem)
+    $CmbMetricsInstance.SelectedIndex = 0
+
+    $opts = Get-ClaudeMetricsFilterOptions -ForceRefresh:$ForceRefresh
+
+    $CmbMetricsProject.Items.Clear()
+    $allProjItem = New-Object System.Windows.Controls.ComboBoxItem
+    $allProjItem.Content = T "FilterAllProjects"
+    $allProjItem.Tag = "ALL"
+    [void]$CmbMetricsProject.Items.Add($allProjItem)
+    foreach ($p in $opts.Projects) {
+        $ci = New-Object System.Windows.Controls.ComboBoxItem
+        $ci.Content = $p
+        $ci.Tag = $p
+        [void]$CmbMetricsProject.Items.Add($ci)
+    }
+    $CmbMetricsProject.SelectedIndex = 0
+
+    $CmbMetricsModel.Items.Clear()
+    $allModItem = New-Object System.Windows.Controls.ComboBoxItem
+    $allModItem.Content = T "FilterAllModels"
+    $allModItem.Tag = "ALL"
+    [void]$CmbMetricsModel.Items.Add($allModItem)
+    foreach ($m in $opts.Models) {
+        $ci = New-Object System.Windows.Controls.ComboBoxItem
+        $ci.Content = $m
+        $ci.Tag = $m
+        [void]$CmbMetricsModel.Items.Add($ci)
+    }
+    $CmbMetricsModel.SelectedIndex = 0
+}
+
+function Refresh-MetricsUI([switch]$ForceRefresh) {
+    if (-not $script:MetricsInitialized -or $ForceRefresh) {
+        Initialize-MetricsFilterCombos -ForceRefresh:$ForceRefresh
+        $script:MetricsInitialized = $true
+    }
+
+    $period = if ($CmbMetricsPeriod.SelectedItem -and $CmbMetricsPeriod.SelectedItem.Tag) { [string]$CmbMetricsPeriod.SelectedItem.Tag } else { "30d" }
+    $instId = if ($CmbMetricsInstance.SelectedItem -and $CmbMetricsInstance.SelectedItem.Tag) { [string]$CmbMetricsInstance.SelectedItem.Tag } else { "ALL" }
+    $proj   = if ($CmbMetricsProject.SelectedItem -and $CmbMetricsProject.SelectedItem.Tag) { [string]$CmbMetricsProject.SelectedItem.Tag } else { "ALL" }
+    $mod    = if ($CmbMetricsModel.SelectedItem -and $CmbMetricsModel.SelectedItem.Tag) { [string]$CmbMetricsModel.SelectedItem.Tag } else { "ALL" }
+    $incSub = ($ChkMetricsSubagents.IsChecked -eq $true)
+
+    $rep = Get-ClaudeMetricsReport `
+        -Period $period `
+        -StartDate $TxtMetricsStartDate.Text `
+        -EndDate $TxtMetricsEndDate.Text `
+        -InstanceId $instId `
+        -ProjectName $proj `
+        -Model $mod `
+        -IncludeSubagents $incSub `
+        -ForceRefresh:$ForceRefresh
+
+    $script:CurrentMetricsReport = $rep
+    $s = $rep.Summary
+
+    $TxtKpiCostVal.Text    = $s.TotalCostFmt
+    $TxtKpiCostSub.Text    = "Uncached Value: $($s.UncachedCostFmt)"
+    $TxtKpiSavingsVal.Text = $s.CacheSavingsFmt
+    $TxtKpiSavingsSub.Text = "Cache Hit Rate: $($s.CacheHitRatePct)"
+    $TxtKpiTokensVal.Text  = $s.TotalTokensFmt
+    $TxtKpiTokensSub.Text  = "Out: $($s.OutputTokensFmt) | Cache Read: $($s.CacheReadFmt)"
+    $TxtKpiTurnsVal.Text   = "$($s.TotalMessages)"
+    $TxtKpiTurnsSub.Text   = "Subagents: $($s.SubagentMessages)"
+
+    $DgMetricsProjects.ItemsSource  = $rep.ByProject
+    $DgMetricsModels.ItemsSource    = $rep.ByModel
+    $DgMetricsDays.ItemsSource      = $rep.ByDay
+    $DgMetricsInstances.ItemsSource = $rep.ByInstance
+    $DgMetricsSessions.ItemsSource  = $rep.BySession
+
+    Set-Status "Metrics updated: $($s.TotalMessages) turns | $($s.TotalTokensFmt) tokens | $($s.TotalCostFmt) USD (Saved $($s.CacheSavingsFmt) via Prompt Cache)."
 }
 
 function Refresh-ProtocolUI {
@@ -1129,7 +1472,17 @@ $CmbLanguage.Add_SelectionChanged({
         Refresh-SessionLists
         Refresh-ProtocolUI
         Refresh-UpdateAndBackupUI
+        if ($script:MetricsInitialized) { Refresh-MetricsUI }
         Set-Status (T "MsgReady")
+    }
+})
+
+$MainTabControl.Add_SelectionChanged({
+    param($sender, $e)
+    if ($e.Source -eq $MainTabControl -and $MainTabControl.SelectedItem -eq $TabMetrics) {
+        if (-not $script:MetricsInitialized) {
+            Refresh-MetricsUI
+        }
     }
 })
 
@@ -1139,7 +1492,62 @@ $BtnRefreshAll.Add_Click({
     Refresh-SessionLists
     Refresh-ProtocolUI
     Refresh-UpdateAndBackupUI
+    if ($script:MetricsInitialized -or $MainTabControl.SelectedItem -eq $TabMetrics) {
+        Refresh-MetricsUI -ForceRefresh
+    }
     Set-Status (T "MsgReady")
+})
+
+# Tab 3 Metrics Events
+$BtnApplyMetrics.Add_Click({ Refresh-MetricsUI })
+$CmbMetricsPeriod.Add_SelectionChanged({
+    if ($script:MetricsInitialized) { Refresh-MetricsUI }
+})
+$CmbMetricsInstance.Add_SelectionChanged({
+    if ($script:MetricsInitialized) { Refresh-MetricsUI }
+})
+$CmbMetricsProject.Add_SelectionChanged({
+    if ($script:MetricsInitialized) { Refresh-MetricsUI }
+})
+$CmbMetricsModel.Add_SelectionChanged({
+    if ($script:MetricsInitialized) { Refresh-MetricsUI }
+})
+$ChkMetricsSubagents.Add_Click({
+    if ($script:MetricsInitialized) { Refresh-MetricsUI }
+})
+
+$BtnExportMetrics.Add_Click({
+    try {
+        if (-not $script:CurrentMetricsReport) { Refresh-MetricsUI }
+        $fbd = New-Object System.Windows.Forms.FolderBrowserDialog
+        $fbd.Description = "Select folder to save Executive HTML Report and CSV"
+        $fbd.ShowNewFolderButton = $true
+        if ($fbd.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
+
+        $out = Export-ClaudeMetricsReport -Report $script:CurrentMetricsReport -OutputDirectory $fbd.SelectedPath -OpenHtml
+        Set-Status "Exported Metrics Report: $($out.HtmlPath) and $($out.CsvPath)"
+    } catch {
+        [System.Windows.MessageBox]::Show($_.Exception.Message, "Export Error", "OK", "Error") | Out-Null
+    }
+})
+
+$BtnEditPricing.Add_Click({
+    $p = Get-ClaudeModelPricingTable
+    $msg = @"
+Current API Pricing Table (USD per 1M Tokens):
+
+- Opus / Fable:
+  Input: `$$($p.opus.InputPerM) | Output: `$$($p.opus.OutputPerM) | Cache Write: `$$($p.opus.CacheWritePerM) | Cache Read: `$$($p.opus.CacheReadPerM)
+
+- Sonnet:
+  Input: `$$($p.sonnet.InputPerM) | Output: `$$($p.sonnet.OutputPerM) | Cache Write: `$$($p.sonnet.CacheWritePerM) | Cache Read: `$$($p.sonnet.CacheReadPerM)
+
+- Haiku:
+  Input: `$$($p.haiku.InputPerM) | Output: `$$($p.haiku.OutputPerM) | Cache Write: `$$($p.haiku.CacheWritePerM) | Cache Read: `$$($p.haiku.CacheReadPerM)
+
+(Custom rates can also be overridden under the 'pricing' key in %LOCALAPPDATA%\Claude-Instances\cim-state.json)
+"@
+    [System.Windows.MessageBox]::Show($msg, "CIM — USD Pricing Table (per 1M Tokens)", "OK", "Information") | Out-Null
 })
 
 $BtnSyncAllLinks.Add_Click({
@@ -1201,7 +1609,6 @@ $BtnSaveInstance.Add_Click({
 
 $CmbSourceInstance.Add_SelectionChanged({ Refresh-SessionLists })
 $CmbTargetInstance.Add_SelectionChanged({ Refresh-SessionLists })
-# Fast in-memory filter on keystroke without touching disk
 $TxtSessionFilter.Add_TextChanged({ Update-SourceSessionFilterOnly })
 
 $BtnSelectAllSessions.Add_Click({ $LstSourceSessions.SelectAll() })
@@ -1264,7 +1671,6 @@ function Invoke-SessionTransfer([bool]$MoveMode) {
 $BtnCopySessions.Add_Click({ Invoke-SessionTransfer -MoveMode $false })
 $BtnMoveSessions.Add_Click({ Invoke-SessionTransfer -MoveMode $true })
 
-# Portable Pack Export (.cimpack)
 $BtnExportPack.Add_Click({
     try {
         $srcItem = $CmbSourceInstance.SelectedItem
@@ -1308,7 +1714,6 @@ $BtnExportPack.Add_Click({
     }
 })
 
-# Portable Pack Import (.cimpack) with Project Folder Remapping
 $BtnImportPack.Add_Click({
     try {
         $dstItem = $CmbTargetInstance.SelectedItem
@@ -1478,7 +1883,6 @@ $BtnOpenBackupsFolder.Add_Click({
 
 Apply-Localization
 
-# Populate UI immediately after window renders so startup is instantaneous
 $Window.Add_ContentRendered({
     Refresh-InstancesUI
     Refresh-SessionLists
