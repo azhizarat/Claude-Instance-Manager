@@ -1,9 +1,217 @@
-﻿# Core-Metrics.ps1 — Token Usage, USD Cost FinOps, Prompt Cache Savings, Multi-Dimensional Filtering & Executive HTML/CSV Exporter
+﻿# Core-Metrics.ps1 — Token Usage, Multi-Currency Historical Daily FX (Frankfurter/OpenER Public APIs), Locale-Aware Formatting (pt-BR / en-US) & Executive HTML/CSV Exporter
 
 Add-Type -AssemblyName System.Web
 
 $script:CachedRawTurnRecords = $null
 $script:CachedSessionLookup = $null
+$script:FxCacheFile = Join-Path $env:LOCALAPPDATA "Claude-Instances\cim-fx-cache.json"
+$script:FxMemoryCache = $null
+
+function Get-SupportedCurrencies {
+    return @(
+        [PSCustomObject]@{ Code = "USD"; Symbol = "$";   SymbolPt = "US$ "; NamePt = "Dólar Americano (USD)"; NameEn = "US Dollar (USD)" },
+        [PSCustomObject]@{ Code = "BRL"; Symbol = "R$ "; SymbolPt = "R$ ";  NamePt = "Real Brasileiro (BRL)"; NameEn = "Brazilian Real (BRL)" },
+        [PSCustomObject]@{ Code = "EUR"; Symbol = "€";   SymbolPt = "€ ";   NamePt = "Euro (EUR)";            NameEn = "Euro (EUR)" },
+        [PSCustomObject]@{ Code = "GBP"; Symbol = "£";   SymbolPt = "£ ";   NamePt = "Libra Esterlina (GBP)"; NameEn = "British Pound (GBP)" },
+        [PSCustomObject]@{ Code = "CAD"; Symbol = "CA$"; SymbolPt = "CA$ "; NamePt = "Dólar Canadense (CAD)"; NameEn = "Canadian Dollar (CAD)" },
+        [PSCustomObject]@{ Code = "AUD"; Symbol = "A$";  SymbolPt = "A$ ";  NamePt = "Dólar Australiano (AUD)"; NameEn = "Australian Dollar (AUD)" },
+        [PSCustomObject]@{ Code = "JPY"; Symbol = "¥";   SymbolPt = "¥ ";   NamePt = "Iene Japonês (JPY)";    NameEn = "Japanese Yen (JPY)" },
+        [PSCustomObject]@{ Code = "CHF"; Symbol = "CHF ";SymbolPt = "CHF "; NamePt = "Franco Suíço (CHF)";    NameEn = "Swiss Franc (CHF)" },
+        [PSCustomObject]@{ Code = "MXN"; Symbol = "MX$"; SymbolPt = "MX$ "; NamePt = "Peso Mexicano (MXN)";   NameEn = "Mexican Peso (MXN)" }
+    )
+}
+
+function Get-CultureForLanguage([string]$Language = "") {
+    if ([string]::IsNullOrWhiteSpace($Language)) {
+        $st = Get-CIMState
+        $Language = if ($st.language) { [string]$st.language } else { "pt-BR" }
+    }
+    if ($Language -like "pt*") {
+        return [System.Globalization.CultureInfo]::GetCultureInfo("pt-BR")
+    }
+    return [System.Globalization.CultureInfo]::GetCultureInfo("en-US")
+}
+
+function Format-LocaleNumber([double]$Value, [int]$Decimals = 0, [System.Globalization.CultureInfo]$Culture) {
+    if ($null -eq $Culture) { $Culture = Get-CultureForLanguage }
+    $fmt = "N$Decimals"
+    return $Value.ToString($fmt, $Culture)
+}
+
+function Format-TokenCount([int64]$Tokens, [System.Globalization.CultureInfo]$Culture) {
+    if ($null -eq $Culture) { $Culture = Get-CultureForLanguage }
+    if ($Tokens -ge 1000000000) {
+        return (($Tokens / 1000000000.0).ToString("N2", $Culture) + " B")
+    } elseif ($Tokens -ge 1000000) {
+        return (($Tokens / 1000000.0).ToString("N2", $Culture) + " M")
+    } elseif ($Tokens -ge 1000) {
+        return (($Tokens / 1000.0).ToString("N1", $Culture) + " K")
+    }
+    return $Tokens.ToString("N0", $Culture)
+}
+
+function Format-CurrencyValue([double]$Amount, [string]$CurrencyCode = "USD", [System.Globalization.CultureInfo]$Culture) {
+    if ($null -eq $Culture) { $Culture = Get-CultureForLanguage }
+    $curr = Get-SupportedCurrencies | Where-Object { $_.Code -eq $CurrencyCode } | Select-Object -First 1
+    $isPt = ($Culture.Name -like "pt*")
+    $prefix = if ($curr) {
+        if ($isPt) { $curr.SymbolPt } else { $curr.Symbol }
+    } else {
+        "$CurrencyCode "
+    }
+    $decimals = if ($CurrencyCode -eq "JPY") { 0 } else { 2 }
+    return "$prefix$($Amount.ToString("N$decimals", $Culture))"
+}
+
+function Get-DefaultFallbackRates {
+    return @{
+        "USD" = 1.0
+        "BRL" = 5.89
+        "EUR" = 0.91
+        "GBP" = 0.76
+        "CAD" = 1.40
+        "AUD" = 1.54
+        "JPY" = 154.50
+        "CHF" = 0.88
+        "MXN" = 20.35
+    }
+}
+
+function Get-ClaudeFxCache([switch]$ForceOnlineUpdate) {
+    if (-not $ForceOnlineUpdate -and $null -ne $script:FxMemoryCache) {
+        return $script:FxMemoryCache
+    }
+
+    $todayStr = (Get-Date).ToString("yyyy-MM-dd")
+    $cacheObj = @{
+        updatedDate = ""
+        source      = "Fallback"
+        latest      = Get-DefaultFallbackRates
+        daily       = @{}
+    }
+
+    if (Test-Path $script:FxCacheFile) {
+        try {
+            $raw = Get-Content $script:FxCacheFile -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($raw.updatedDate) { $cacheObj.updatedDate = [string]$raw.updatedDate }
+            if ($raw.source)      { $cacheObj.source      = [string]$raw.source }
+            if ($raw.latest) {
+                foreach ($p in $raw.latest.PSObject.Properties) {
+                    $cacheObj.latest[$p.Name] = [double]$p.Value
+                }
+            }
+            if ($raw.daily) {
+                foreach ($dProp in $raw.daily.PSObject.Properties) {
+                    $dayRates = @{}
+                    foreach ($cProp in $dProp.Value.PSObject.Properties) {
+                        $dayRates[$cProp.Name] = [double]$cProp.Value
+                    }
+                    $cacheObj.daily[$dProp.Name] = $dayRates
+                }
+            }
+        } catch {}
+    }
+
+    if ($ForceOnlineUpdate -or $cacheObj.updatedDate -ne $todayStr -or $cacheObj.daily.Count -eq 0) {
+        $symbols = "BRL,EUR,GBP,CAD,AUD,JPY,CHF,MXN"
+        $startHist = (Get-Date).AddDays(-365).ToString("yyyy-MM-dd")
+        $fetchedOnline = $false
+
+        # 1. Fetch historical daily time-series from Frankfurter (ECB public API)
+        try {
+            $histUrl = "https://api.frankfurter.app/${startHist}..${todayStr}?from=USD&to=${symbols}"
+            $histResp = Invoke-RestMethod -Uri $histUrl -TimeoutSec 5 -ErrorAction Stop
+            if ($histResp -and $histResp.rates) {
+                foreach ($dProp in $histResp.rates.PSObject.Properties) {
+                    $dayMap = @{ "USD" = 1.0 }
+                    foreach ($cProp in $dProp.Value.PSObject.Properties) {
+                        $dayMap[$cProp.Name] = [double]$cProp.Value
+                    }
+                    $cacheObj.daily[$dProp.Name] = $dayMap
+                }
+                $sortedDates = @($cacheObj.daily.Keys | Sort-Object)
+                if ($sortedDates.Count -gt 0) {
+                    $lastDay = $sortedDates[$sortedDates.Count - 1]
+                    foreach ($k in $cacheObj.daily[$lastDay].Keys) {
+                        $cacheObj.latest[$k] = $cacheObj.daily[$lastDay][$k]
+                    }
+                }
+                $cacheObj.source = "Frankfurter ECB Historical + Spot API"
+                $fetchedOnline = $true
+            }
+        } catch {}
+
+        # 2. Fetch live spot rates from open.er-api.com for today's exact rate
+        try {
+            $spotResp = Invoke-RestMethod -Uri "https://open.er-api.com/v6/latest/USD" -TimeoutSec 4 -ErrorAction Stop
+            if ($spotResp -and $spotResp.rates) {
+                $todayMap = @{ "USD" = 1.0 }
+                foreach ($code in @("BRL", "EUR", "GBP", "CAD", "AUD", "JPY", "CHF", "MXN")) {
+                    if ($spotResp.rates.PSObject.Properties[$code]) {
+                        $val = [double]$spotResp.rates.PSObject.Properties[$code].Value
+                        $cacheObj.latest[$code] = $val
+                        $todayMap[$code] = $val
+                    }
+                }
+                $cacheObj.daily[$todayStr] = $todayMap
+                if (-not $fetchedOnline) {
+                    $cacheObj.source = "Open Exchange Rates Public API"
+                }
+                $fetchedOnline = $true
+            }
+        } catch {}
+
+        if ($fetchedOnline) {
+            $cacheObj.updatedDate = $todayStr
+            try {
+                $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+                [System.IO.File]::WriteAllText($script:FxCacheFile, ($cacheObj | ConvertTo-Json -Depth 6), $utf8NoBom)
+            } catch {}
+        }
+    }
+
+    # Build sorted date array for fast prior-trading-day lookup on weekends/holidays
+    $cacheObj["sortedDates"] = @($cacheObj.daily.Keys | Sort-Object)
+    $script:FxMemoryCache = $cacheObj
+    return $cacheObj
+}
+
+function Get-ClaudeExchangeRateForDate([string]$CurrencyCode, [string]$DateStr, [hashtable]$FxCache) {
+    if ([string]::IsNullOrWhiteSpace($CurrencyCode) -or $CurrencyCode -eq "USD") { return 1.0 }
+    if ($null -eq $FxCache) { $FxCache = Get-ClaudeFxCache }
+
+    if (-not [string]::IsNullOrWhiteSpace($DateStr) -and $FxCache.daily) {
+        if ($FxCache.daily.ContainsKey($DateStr)) {
+            $dayMap = $FxCache.daily[$DateStr]
+            if ($dayMap.ContainsKey($CurrencyCode)) { return [double]$dayMap[$CurrencyCode] }
+        }
+        # Find closest prior trading day for weekend/holiday dates
+        $sorted = $FxCache["sortedDates"]
+        if ($sorted -and $sorted.Count -gt 0) {
+            $priorRate = $null
+            foreach ($d in $sorted) {
+                if ($d -le $DateStr) {
+                    $dm = $FxCache.daily[$d]
+                    if ($dm.ContainsKey($CurrencyCode)) { $priorRate = [double]$dm[$CurrencyCode] }
+                } else {
+                    break
+                }
+            }
+            if ($null -ne $priorRate) { return $priorRate }
+        }
+    }
+
+    if ($FxCache.latest -and $FxCache.latest.ContainsKey($CurrencyCode)) {
+        return [double]$FxCache.latest[$CurrencyCode]
+    }
+    return 1.0
+}
+
+function Start-MetricsBackgroundPrewarm {
+    Initialize-CIMNativeEngine
+    $projectsRoot = Join-Path $env:USERPROFILE ".claude\projects"
+    [CIMNative.FastMetricsScanner]::StartBackgroundPrewarm($projectsRoot)
+}
 
 function Get-DefaultClaudeModelPricing {
     return @{
@@ -44,17 +252,6 @@ function Resolve-ModelTierRates([string]$ModelName, [hashtable]$PricingTable) {
     if ($m -match "haiku")  { return $PricingTable["haiku"] }
     if ($m -match "sonnet") { return $PricingTable["sonnet"] }
     return $PricingTable["sonnet"]
-}
-
-function Format-TokenCount([int64]$Tokens) {
-    if ($Tokens -ge 1000000000) {
-        return ("{0:N2} B" -f ($Tokens / 1000000000.0))
-    } elseif ($Tokens -ge 1000000) {
-        return ("{0:N2} M" -f ($Tokens / 1000000.0))
-    } elseif ($Tokens -ge 1000) {
-        return ("{0:N1} K" -f ($Tokens / 1000.0))
-    }
-    return "$Tokens"
 }
 
 function Build-SessionInstanceLookup([switch]$ForceRefresh) {
@@ -101,7 +298,7 @@ function Get-RawClaudeTurnRecords([switch]$ForceRefresh) {
 
     Initialize-CIMNativeEngine
     $projectsRoot = Join-Path $env:USERPROFILE ".claude\projects"
-    $raw = [CIMNative.FastMetricsScanner]::ScanAllProjects($projectsRoot)
+    $raw = [CIMNative.FastMetricsScanner]::ScanAllProjects($projectsRoot, [bool]$ForceRefresh)
     $lookup = Build-SessionInstanceLookup -ForceRefresh:$ForceRefresh
 
     $enriched = New-Object 'System.Collections.Generic.List[PSCustomObject]'
@@ -189,11 +386,16 @@ function Get-ClaudeMetricsReport {
         [string]$ProjectName = "ALL",
         [string]$Model = "ALL",
         [bool]$IncludeSubagents = $true,
+        [string]$Currency = "USD",
+        [string]$Language = "",
         [switch]$ForceRefresh
     )
 
+    $culture = Get-CultureForLanguage -Language $Language
     $records = Get-RawClaudeTurnRecords -ForceRefresh:$ForceRefresh
     $pricing = Get-ClaudeModelPricingTable
+    $fxCache = Get-ClaudeFxCache -ForceOnlineUpdate:$ForceRefresh
+    $spotRate = Get-ClaudeExchangeRateForDate -CurrencyCode $Currency -DateStr "" -FxCache $fxCache
 
     $todayStr = (Get-Date).ToString("yyyy-MM-dd")
     $minDate = "0000-01-01"
@@ -231,14 +433,15 @@ function Get-ClaudeMetricsReport {
     $totalTok = [int64]0
     $totalMsgs = 0
     $subagentMsgs = 0
-    $totalCostUSD = [double]0.0
-    $totalUncachedUSD = [double]0.0
+    $totalCostConv = [double]0.0
+    $totalUncachedConv = [double]0.0
 
     $projAgg = @{}
     $modelAgg = @{}
     $dayAgg = @{}
     $instAgg = @{}
     $sessAgg = @{}
+    $dateRateMemo = @{}
 
     foreach ($r in $records) {
         if (-not $IncludeSubagents -and $r.IsSubagent) { continue }
@@ -247,19 +450,27 @@ function Get-ClaudeMetricsReport {
         if ($ProjectName -ne "ALL" -and $r.ProjectName -ne $ProjectName) { continue }
         if ($Model -ne "ALL" -and $r.Model -ne $Model) { continue }
 
+        $dk = $r.DateLocal
+        if (-not $dateRateMemo.ContainsKey($dk)) {
+            $dateRateMemo[$dk] = Get-ClaudeExchangeRateForDate -CurrencyCode $Currency -DateStr $dk -FxCache $fxCache
+        }
+        $dayFxRate = [double]$dateRateMemo[$dk]
+
         $rates = Resolve-ModelTierRates -ModelName $r.Model -PricingTable $pricing
-        $cost = (
+        $costUsd = (
             ($r.InputTokens      * $rates.InputPerM) +
             ($r.OutputTokens     * $rates.OutputPerM) +
             ($r.CacheWriteTokens * $rates.CacheWritePerM) +
             ($r.CacheReadTokens  * $rates.CacheReadPerM)
         ) / 1000000.0
 
-        $uncached = (
+        $uncachedUsd = (
             (($r.InputTokens + $r.CacheWriteTokens + $r.CacheReadTokens) * $rates.InputPerM) +
             ($r.OutputTokens * $rates.OutputPerM)
         ) / 1000000.0
 
+        $cost = $costUsd * $dayFxRate
+        $uncached = $uncachedUsd * $dayFxRate
         $savings = [Math]::Max(0.0, ($uncached - $cost))
 
         $tCount = [int]$r.TurnCount
@@ -271,8 +482,8 @@ function Get-ClaudeMetricsReport {
         $totalTok += $r.TotalTokens
         $totalMsgs += $tCount
         if ($r.IsSubagent) { $subagentMsgs += $tCount }
-        $totalCostUSD += $cost
-        $totalUncachedUSD += $uncached
+        $totalCostConv += $cost
+        $totalUncachedConv += $uncached
 
         # 1. Project Aggregation
         $pk = if ($r.ProjectName) { $r.ProjectName } else { "(Unknown)" }
@@ -287,8 +498,8 @@ function Get-ClaudeMetricsReport {
                 CacheWriteTokens = [int64]0
                 CacheReadTokens  = [int64]0
                 TotalTokens      = [int64]0
-                CostUSD          = [double]0.0
-                SavingsUSD       = [double]0.0
+                Cost             = [double]0.0
+                Savings          = [double]0.0
             }
         }
         $pa = $projAgg[$pk]
@@ -298,8 +509,8 @@ function Get-ClaudeMetricsReport {
         $pa.CacheWriteTokens += $r.CacheWriteTokens
         $pa.CacheReadTokens += $r.CacheReadTokens
         $pa.TotalTokens += $r.TotalTokens
-        $pa.CostUSD += $cost
-        $pa.SavingsUSD += $savings
+        $pa.Cost += $cost
+        $pa.Savings += $savings
 
         # 2. Model Aggregation
         $mk = if ($r.Model) { $r.Model } else { "unknown" }
@@ -312,8 +523,8 @@ function Get-ClaudeMetricsReport {
                 CacheWriteTokens = [int64]0
                 CacheReadTokens  = [int64]0
                 TotalTokens      = [int64]0
-                CostUSD          = [double]0.0
-                SavingsUSD       = [double]0.0
+                Cost             = [double]0.0
+                Savings          = [double]0.0
             }
         }
         $ma = $modelAgg[$mk]
@@ -323,21 +534,21 @@ function Get-ClaudeMetricsReport {
         $ma.CacheWriteTokens += $r.CacheWriteTokens
         $ma.CacheReadTokens += $r.CacheReadTokens
         $ma.TotalTokens += $r.TotalTokens
-        $ma.CostUSD += $cost
-        $ma.SavingsUSD += $savings
+        $ma.Cost += $cost
+        $ma.Savings += $savings
 
         # 3. Daily Aggregation
-        $dk = $r.DateLocal
         if (-not $dayAgg.ContainsKey($dk)) {
             $dayAgg[$dk] = @{
                 Date        = $dk
+                FxRate      = $dayFxRate
                 Messages    = 0
                 InputTokens = [int64]0
                 OutputTokens= [int64]0
                 CacheTokens = [int64]0
                 TotalTokens = [int64]0
-                CostUSD     = [double]0.0
-                SavingsUSD  = [double]0.0
+                Cost        = [double]0.0
+                Savings     = [double]0.0
             }
         }
         $da = $dayAgg[$dk]
@@ -346,8 +557,8 @@ function Get-ClaudeMetricsReport {
         $da.OutputTokens += $r.OutputTokens
         $da.CacheTokens += ($r.CacheReadTokens + $r.CacheWriteTokens)
         $da.TotalTokens += $r.TotalTokens
-        $da.CostUSD += $cost
-        $da.SavingsUSD += $savings
+        $da.Cost += $cost
+        $da.Savings += $savings
 
         # 4. Instance Aggregation
         $ik = $r.InstanceName
@@ -356,15 +567,15 @@ function Get-ClaudeMetricsReport {
                 InstanceName = $ik
                 Messages     = 0
                 TotalTokens  = [int64]0
-                CostUSD      = [double]0.0
-                SavingsUSD   = [double]0.0
+                Cost         = [double]0.0
+                Savings      = [double]0.0
             }
         }
         $ia = $instAgg[$ik]
         $ia.Messages += $tCount
         $ia.TotalTokens += $r.TotalTokens
-        $ia.CostUSD += $cost
-        $ia.SavingsUSD += $savings
+        $ia.Cost += $cost
+        $ia.Savings += $savings
 
         # 5. Session Aggregation
         $sk = if ($r.CliSessionId) { $r.CliSessionId } else { $pk }
@@ -378,132 +589,139 @@ function Get-ClaudeMetricsReport {
                 LastDate     = $r.DateLocal
                 Messages     = 0
                 TotalTokens  = [int64]0
-                CostUSD      = [double]0.0
-                SavingsUSD   = [double]0.0
+                Cost         = [double]0.0
+                Savings      = [double]0.0
             }
         }
         $sa = $sessAgg[$sk]
         $sa.Messages += $tCount
         $sa.TotalTokens += $r.TotalTokens
-        $sa.CostUSD += $cost
-        $sa.SavingsUSD += $savings
+        $sa.Cost += $cost
+        $sa.Savings += $savings
         if ($r.DateLocal -gt $sa.LastDate) { $sa.LastDate = $r.DateLocal }
     }
 
-    $totalSavingsUSD = [Math]::Max(0.0, ($totalUncachedUSD - $totalCostUSD))
+    $totalSavingsConv = [Math]::Max(0.0, ($totalUncachedConv - $totalCostConv))
     $totalInputPrompt = $totalIn + $totalCWrite + $totalCRead
-    $cacheHitPct = if ($totalInputPrompt -gt 0) { [math]::Round(($totalCRead * 100.0) / $totalInputPrompt, 1) } else { 0.0 }
+    $cacheHitPctVal = if ($totalInputPrompt -gt 0) { ($totalCRead * 100.0) / $totalInputPrompt } else { 0.0 }
+    $cacheHitPctStr = ($cacheHitPctVal.ToString("N1", $culture) + "%")
 
-    $byProjectList = @($projAgg.Values | Sort-Object { $_.CostUSD } -Descending | ForEach-Object {
-        $share = if ($totalCostUSD -gt 0) { [math]::Round(($_.CostUSD * 100.0) / $totalCostUSD, 1) } else { 0.0 }
+    $byProjectList = @($projAgg.Values | Sort-Object { $_.Cost } -Descending | ForEach-Object {
+        $shareVal = if ($totalCostConv -gt 0) { ($_.Cost * 100.0) / $totalCostConv } else { 0.0 }
         [PSCustomObject]@{
             ProjectName  = $_.ProjectName
             InstanceName = $_.InstanceName
-            Messages     = $_.Messages
-            InputFmt     = Format-TokenCount ($_.InputTokens + $_.CacheWriteTokens)
-            CacheReadFmt = Format-TokenCount $_.CacheReadTokens
-            OutputFmt    = Format-TokenCount $_.OutputTokens
-            TotalFmt     = Format-TokenCount $_.TotalTokens
+            Turns        = Format-LocaleNumber -Value $_.Messages -Decimals 0 -Culture $culture
+            InputFmt     = Format-TokenCount ($_.InputTokens + $_.CacheWriteTokens) $culture
+            CacheReadFmt = Format-TokenCount $_.CacheReadTokens $culture
+            OutputFmt    = Format-TokenCount $_.OutputTokens $culture
+            TotalFmt     = Format-TokenCount $_.TotalTokens $culture
             TotalTokens  = $_.TotalTokens
-            CostUSD      = [math]::Round($_.CostUSD, 2)
-            CostFmt      = ("`${0:N2}" -f $_.CostUSD)
-            SavingsFmt   = ("`${0:N2}" -f $_.SavingsUSD)
-            SharePct     = "$share%"
+            CostRaw      = [math]::Round($_.Cost, 2)
+            CostFmt      = Format-CurrencyValue -Amount $_.Cost -CurrencyCode $Currency -Culture $culture
+            SavingsFmt   = Format-CurrencyValue -Amount $_.Savings -CurrencyCode $Currency -Culture $culture
+            SharePct     = ($shareVal.ToString("N1", $culture) + "%")
         }
     })
 
-    $byModelList = @($modelAgg.Values | Sort-Object { $_.CostUSD } -Descending | ForEach-Object {
-        $share = if ($totalCostUSD -gt 0) { [math]::Round(($_.CostUSD * 100.0) / $totalCostUSD, 1) } else { 0.0 }
+    $byModelList = @($modelAgg.Values | Sort-Object { $_.Cost } -Descending | ForEach-Object {
+        $shareVal = if ($totalCostConv -gt 0) { ($_.Cost * 100.0) / $totalCostConv } else { 0.0 }
         [PSCustomObject]@{
             Model        = $_.Model
-            Messages     = $_.Messages
-            InputFmt     = Format-TokenCount ($_.InputTokens + $_.CacheWriteTokens)
-            CacheReadFmt = Format-TokenCount $_.CacheReadTokens
-            OutputFmt    = Format-TokenCount $_.OutputTokens
-            TotalFmt     = Format-TokenCount $_.TotalTokens
+            Turns        = Format-LocaleNumber -Value $_.Messages -Decimals 0 -Culture $culture
+            InputFmt     = Format-TokenCount ($_.InputTokens + $_.CacheWriteTokens) $culture
+            CacheReadFmt = Format-TokenCount $_.CacheReadTokens $culture
+            OutputFmt    = Format-TokenCount $_.OutputTokens $culture
+            TotalFmt     = Format-TokenCount $_.TotalTokens $culture
             TotalTokens  = $_.TotalTokens
-            CostUSD      = [math]::Round($_.CostUSD, 2)
-            CostFmt      = ("`${0:N2}" -f $_.CostUSD)
-            SavingsFmt   = ("`${0:N2}" -f $_.SavingsUSD)
-            SharePct     = "$share%"
+            CostRaw      = [math]::Round($_.Cost, 2)
+            CostFmt      = Format-CurrencyValue -Amount $_.Cost -CurrencyCode $Currency -Culture $culture
+            SavingsFmt   = Format-CurrencyValue -Amount $_.Savings -CurrencyCode $Currency -Culture $culture
+            SharePct     = ($shareVal.ToString("N1", $culture) + "%")
         }
     })
 
     $maxDayCost = 0.01
     foreach ($d in $dayAgg.Values) {
-        if ($d.CostUSD -gt $maxDayCost) { $maxDayCost = $d.CostUSD }
+        if ($d.Cost -gt $maxDayCost) { $maxDayCost = $d.Cost }
     }
 
     $byDayList = @($dayAgg.Values | Sort-Object { $_.Date } -Descending | ForEach-Object {
-        $blocks = [int][Math]::Round(($_.CostUSD / $maxDayCost) * 20)
+        $blocks = [int][Math]::Round(($_.Cost / $maxDayCost) * 20)
         if ($blocks -lt 1 -and $_.TotalTokens -gt 0) { $blocks = 1 }
         $barStr = ("#" * $blocks).PadRight(20, ".")
         [PSCustomObject]@{
             Date        = $_.Date
-            Messages    = $_.Messages
-            InputFmt    = Format-TokenCount $_.InputTokens
-            OutputFmt   = Format-TokenCount $_.OutputTokens
-            CacheFmt    = Format-TokenCount $_.CacheTokens
-            TotalFmt    = Format-TokenCount $_.TotalTokens
+            FxRateFmt   = if ($Currency -eq "USD") { "1.00" } else { $_.FxRate.ToString("N4", $culture) }
+            Turns       = Format-LocaleNumber -Value $_.Messages -Decimals 0 -Culture $culture
+            InputFmt    = Format-TokenCount $_.InputTokens $culture
+            OutputFmt   = Format-TokenCount $_.OutputTokens $culture
+            CacheFmt    = Format-TokenCount $_.CacheTokens $culture
+            TotalFmt    = Format-TokenCount $_.TotalTokens $culture
             TotalTokens = $_.TotalTokens
-            CostUSD     = [math]::Round($_.CostUSD, 2)
-            CostFmt     = ("`${0:N2}" -f $_.CostUSD)
-            SavingsFmt  = ("`${0:N2}" -f $_.SavingsUSD)
+            CostRaw     = [math]::Round($_.Cost, 2)
+            CostFmt     = Format-CurrencyValue -Amount $_.Cost -CurrencyCode $Currency -Culture $culture
+            SavingsFmt  = Format-CurrencyValue -Amount $_.Savings -CurrencyCode $Currency -Culture $culture
             TrendBar    = $barStr
         }
     })
 
-    $byInstanceList = @($instAgg.Values | Sort-Object { $_.CostUSD } -Descending | ForEach-Object {
-        $share = if ($totalCostUSD -gt 0) { [math]::Round(($_.CostUSD * 100.0) / $totalCostUSD, 1) } else { 0.0 }
+    $byInstanceList = @($instAgg.Values | Sort-Object { $_.Cost } -Descending | ForEach-Object {
+        $shareVal = if ($totalCostConv -gt 0) { ($_.Cost * 100.0) / $totalCostConv } else { 0.0 }
         [PSCustomObject]@{
             InstanceName = $_.InstanceName
-            Messages     = $_.Messages
-            TotalFmt     = Format-TokenCount $_.TotalTokens
-            CostUSD      = [math]::Round($_.CostUSD, 2)
-            CostFmt      = ("`${0:N2}" -f $_.CostUSD)
-            SavingsFmt   = ("`${0:N2}" -f $_.SavingsUSD)
-            SharePct     = "$share%"
+            Turns        = Format-LocaleNumber -Value $_.Messages -Decimals 0 -Culture $culture
+            TotalFmt     = Format-TokenCount $_.TotalTokens $culture
+            CostRaw      = [math]::Round($_.Cost, 2)
+            CostFmt      = Format-CurrencyValue -Amount $_.Cost -CurrencyCode $Currency -Culture $culture
+            SavingsFmt   = Format-CurrencyValue -Amount $_.Savings -CurrencyCode $Currency -Culture $culture
+            SharePct     = ($shareVal.ToString("N1", $culture) + "%")
         }
     })
 
-    $bySessionList = @($sessAgg.Values | Sort-Object { $_.CostUSD } -Descending | Select-Object -First 100 | ForEach-Object {
+    $bySessionList = @($sessAgg.Values | Sort-Object { $_.Cost } -Descending | Select-Object -First 100 | ForEach-Object {
         [PSCustomObject]@{
             Title        = $_.Title
             ProjectName  = $_.ProjectName
             InstanceName = $_.InstanceName
             Model        = $_.Model
             LastDate     = $_.LastDate
-            Messages     = $_.Messages
-            TotalFmt     = Format-TokenCount $_.TotalTokens
-            CostUSD      = [math]::Round($_.CostUSD, 2)
-            CostFmt      = ("`${0:N2}" -f $_.CostUSD)
-            SavingsFmt   = ("`${0:N2}" -f $_.SavingsUSD)
+            Turns        = Format-LocaleNumber -Value $_.Messages -Decimals 0 -Culture $culture
+            TotalFmt     = Format-TokenCount $_.TotalTokens $culture
+            CostRaw      = [math]::Round($_.Cost, 2)
+            CostFmt      = Format-CurrencyValue -Amount $_.Cost -CurrencyCode $Currency -Culture $culture
+            SavingsFmt   = Format-CurrencyValue -Amount $_.Savings -CurrencyCode $Currency -Culture $culture
         }
     })
 
     return [PSCustomObject]@{
         Summary = [PSCustomObject]@{
+            Currency           = $Currency
+            SpotRateFmt        = $spotRate.ToString("N4", $culture)
+            FxSource           = $fxCache.source
             TotalTokens        = $totalTok
-            TotalTokensFmt     = Format-TokenCount $totalTok
+            TotalTokensFmt     = Format-TokenCount $totalTok $culture
             InputTokens        = $totalIn
-            InputTokensFmt     = Format-TokenCount $totalIn
+            InputTokensFmt     = Format-TokenCount $totalIn $culture
             OutputTokens       = $totalOut
-            OutputTokensFmt    = Format-TokenCount $totalOut
+            OutputTokensFmt    = Format-TokenCount $totalOut $culture
             ThinkingTokens     = $totalThink
-            ThinkingTokensFmt  = Format-TokenCount $totalThink
+            ThinkingTokensFmt  = Format-TokenCount $totalThink $culture
             CacheWriteTokens   = $totalCWrite
-            CacheWriteFmt      = Format-TokenCount $totalCWrite
+            CacheWriteFmt      = Format-TokenCount $totalCWrite $culture
             CacheReadTokens    = $totalCRead
-            CacheReadFmt       = Format-TokenCount $totalCRead
+            CacheReadFmt       = Format-TokenCount $totalCRead $culture
             TotalMessages      = $totalMsgs
+            TotalMessagesFmt   = Format-LocaleNumber -Value $totalMsgs -Decimals 0 -Culture $culture
             SubagentMessages   = $subagentMsgs
-            TotalCostUSD       = [math]::Round($totalCostUSD, 2)
-            TotalCostFmt       = ("`${0:N2}" -f $totalCostUSD)
-            UncachedCostUSD    = [math]::Round($totalUncachedUSD, 2)
-            UncachedCostFmt    = ("`${0:N2}" -f $totalUncachedUSD)
-            CacheSavingsUSD    = [math]::Round($totalSavingsUSD, 2)
-            CacheSavingsFmt    = ("`${0:N2}" -f $totalSavingsUSD)
-            CacheHitRatePct    = "$cacheHitPct%"
+            SubagentMessagesFmt= Format-LocaleNumber -Value $subagentMsgs -Decimals 0 -Culture $culture
+            TotalCostUSD       = [math]::Round($totalCostConv, 2)
+            TotalCostFmt       = Format-CurrencyValue -Amount $totalCostConv -CurrencyCode $Currency -Culture $culture
+            UncachedCostUSD    = [math]::Round($totalUncachedConv, 2)
+            UncachedCostFmt    = Format-CurrencyValue -Amount $totalUncachedConv -CurrencyCode $Currency -Culture $culture
+            CacheSavingsUSD    = [math]::Round($totalSavingsConv, 2)
+            CacheSavingsFmt    = Format-CurrencyValue -Amount $totalSavingsConv -CurrencyCode $Currency -Culture $culture
+            CacheHitRatePct    = $cacheHitPctStr
             MinDate            = $minDate
             MaxDate            = $maxDate
         }
@@ -530,11 +748,9 @@ function Export-ClaudeMetricsReport {
     $csvPath = Join-Path $OutputDirectory "CIM-Metrics-Projects-$ts.csv"
     $htmlPath = Join-Path $OutputDirectory "CIM-Executive-Report-$ts.html"
 
-    # 1. Export CSV
-    $Report.ByProject | Select-Object ProjectName,InstanceName,Messages,TotalTokens,TotalFmt,CostUSD,CostFmt,SavingsFmt,SharePct |
+    $Report.ByProject | Select-Object ProjectName,InstanceName,Turns,TotalTokens,TotalFmt,CostRaw,CostFmt,SavingsFmt,SharePct |
         Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
 
-    # 2. Generate Executive Dark Mode HTML Report
     $s = $Report.Summary
     $sb = New-Object System.Text.StringBuilder
 
@@ -543,7 +759,7 @@ function Export-ClaudeMetricsReport {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Claude Instance Manager — FinOps &amp; Token Usage Report</title>
+<title>Claude Instance Manager — FinOps &amp; Token Usage Report ($($s.Currency))</title>
 <style>
   body { background: #0f0f12; color: #f4f4f5; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 28px; }
   .wrap { max-width: 1120px; margin: 0 auto; }
@@ -561,19 +777,17 @@ function Export-ClaudeMetricsReport {
   th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #27272a; }
   th { color: #a1a1aa; font-weight: 600; background: #121215; }
   .right { text-align: right; }
-  .bar-bg { background: #27272a; height: 8px; border-radius: 4px; width: 120px; display: inline-block; overflow: hidden; vertical-align: middle; margin-right: 8px; }
-  .bar-fill { background: #d97757; height: 100%; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="header">
-    <h1>Claude Code &amp; Desktop — Token Usage &amp; FinOps Executive Report</h1>
-    <div class="sub">Generated by Claude Instance Manager (CIM) on $(Get-Date -Format 'dd/MM/yyyy HH:mm')</div>
+    <h1>Claude Code &amp; Desktop — Token Usage &amp; FinOps Report ($($s.Currency))</h1>
+    <div class="sub">Generated by Claude Instance Manager (CIM) on $(Get-Date -Format 'dd/MM/yyyy HH:mm') &nbsp;|&nbsp; FX Source: $($s.FxSource) (Daily Historical Rates Applied)</div>
   </div>
   <div class="kpis">
     <div class="kpi">
-      <div class="lbl">Estimated API Value (USD)</div>
+      <div class="lbl">Estimated API Value ($($s.Currency))</div>
       <div class="val" style="color:#d97757;">$($s.TotalCostFmt)</div>
       <div class="hint">Without Prompt Cache: $($s.UncachedCostFmt)</div>
     </div>
@@ -589,30 +803,27 @@ function Export-ClaudeMetricsReport {
     </div>
     <div class="kpi">
       <div class="lbl">API Requests / Turns</div>
-      <div class="val" style="color:#f4f4f5;">$($s.TotalMessages)</div>
-      <div class="hint">Subagent Turns: $($s.SubagentMessages)</div>
+      <div class="val" style="color:#f4f4f5;">$($s.TotalMessagesFmt)</div>
+      <div class="hint">Subagent Turns: $($s.SubagentMessagesFmt)</div>
     </div>
   </div>
 "@)
 
-    # By Project Table
-    [void]$sb.AppendLine("<div class='section'><h2>Usage and Cost by Project</h2><table><thead><tr><th>Project</th><th>Instance</th><th class='right'>Turns</th><th class='right'>Input / Cache Write</th><th class='right'>Cache Read</th><th class='right'>Output</th><th class='right'>Total Tokens</th><th class='right'>Cost (USD)</th><th class='right'>Cache Saved</th><th class='right'>Share</th></tr></thead><tbody>")
+    [void]$sb.AppendLine("<div class='section'><h2>Usage and Cost by Project</h2><table><thead><tr><th>Project</th><th>Instance</th><th class='right'>Turns</th><th class='right'>Input / Cache Write</th><th class='right'>Cache Read</th><th class='right'>Output</th><th class='right'>Total Tokens</th><th class='right'>Cost ($($s.Currency))</th><th class='right'>Cache Saved</th><th class='right'>Share</th></tr></thead><tbody>")
     foreach ($p in $Report.ByProject) {
-        [void]$sb.AppendLine("<tr><td><strong>$([System.Web.HttpUtility]::HtmlEncode($p.ProjectName))</strong></td><td>$([System.Web.HttpUtility]::HtmlEncode($p.InstanceName))</td><td class='right'>$($p.Messages)</td><td class='right'>$($p.InputFmt)</td><td class='right'>$($p.CacheReadFmt)</td><td class='right'>$($p.OutputFmt)</td><td class='right'>$($p.TotalFmt)</td><td class='right'><strong>$($p.CostFmt)</strong></td><td class='right' style='color:#10b981;'>$($p.SavingsFmt)</td><td class='right'>$($p.SharePct)</td></tr>")
+        [void]$sb.AppendLine("<tr><td><strong>$([System.Web.HttpUtility]::HtmlEncode($p.ProjectName))</strong></td><td>$([System.Web.HttpUtility]::HtmlEncode($p.InstanceName))</td><td class='right'>$($p.Turns)</td><td class='right'>$($p.InputFmt)</td><td class='right'>$($p.CacheReadFmt)</td><td class='right'>$($p.OutputFmt)</td><td class='right'>$($p.TotalFmt)</td><td class='right'><strong>$($p.CostFmt)</strong></td><td class='right' style='color:#10b981;'>$($p.SavingsFmt)</td><td class='right'>$($p.SharePct)</td></tr>")
     }
     [void]$sb.AppendLine("</tbody></table></div>")
 
-    # By Model Table
-    [void]$sb.AppendLine("<div class='section'><h2>Usage and Cost by Model</h2><table><thead><tr><th>Model</th><th class='right'>Turns</th><th class='right'>Input / Cache Write</th><th class='right'>Cache Read</th><th class='right'>Output</th><th class='right'>Total Tokens</th><th class='right'>Cost (USD)</th><th class='right'>Cache Saved</th><th class='right'>Share</th></tr></thead><tbody>")
+    [void]$sb.AppendLine("<div class='section'><h2>Usage and Cost by Model</h2><table><thead><tr><th>Model</th><th class='right'>Turns</th><th class='right'>Input / Cache Write</th><th class='right'>Cache Read</th><th class='right'>Output</th><th class='right'>Total Tokens</th><th class='right'>Cost ($($s.Currency))</th><th class='right'>Cache Saved</th><th class='right'>Share</th></tr></thead><tbody>")
     foreach ($m in $Report.ByModel) {
-        [void]$sb.AppendLine("<tr><td><strong>$([System.Web.HttpUtility]::HtmlEncode($m.Model))</strong></td><td class='right'>$($m.Messages)</td><td class='right'>$($m.InputFmt)</td><td class='right'>$($m.CacheReadFmt)</td><td class='right'>$($m.OutputFmt)</td><td class='right'>$($m.TotalFmt)</td><td class='right'><strong>$($m.CostFmt)</strong></td><td class='right' style='color:#10b981;'>$($m.SavingsFmt)</td><td class='right'>$($m.SharePct)</td></tr>")
+        [void]$sb.AppendLine("<tr><td><strong>$([System.Web.HttpUtility]::HtmlEncode($m.Model))</strong></td><td class='right'>$($m.Turns)</td><td class='right'>$($m.InputFmt)</td><td class='right'>$($m.CacheReadFmt)</td><td class='right'>$($m.OutputFmt)</td><td class='right'>$($m.TotalFmt)</td><td class='right'><strong>$($m.CostFmt)</strong></td><td class='right' style='color:#10b981;'>$($m.SavingsFmt)</td><td class='right'>$($m.SharePct)</td></tr>")
     }
     [void]$sb.AppendLine("</tbody></table></div>")
 
-    # By Day Table
-    [void]$sb.AppendLine("<div class='section'><h2>Daily Consumption Timeline</h2><table><thead><tr><th>Date</th><th class='right'>Turns</th><th class='right'>Input</th><th class='right'>Cache</th><th class='right'>Output</th><th class='right'>Total Tokens</th><th class='right'>Cost (USD)</th><th class='right'>Cache Saved</th></tr></thead><tbody>")
+    [void]$sb.AppendLine("<div class='section'><h2>Daily Consumption Timeline (with Daily FX Rate)</h2><table><thead><tr><th>Date</th><th class='right'>Daily FX (1 USD)</th><th class='right'>Turns</th><th class='right'>Input</th><th class='right'>Cache</th><th class='right'>Output</th><th class='right'>Total Tokens</th><th class='right'>Cost ($($s.Currency))</th><th class='right'>Cache Saved</th></tr></thead><tbody>")
     foreach ($d in $Report.ByDay) {
-        [void]$sb.AppendLine("<tr><td><strong>$($d.Date)</strong></td><td class='right'>$($d.Messages)</td><td class='right'>$($d.InputFmt)</td><td class='right'>$($d.CacheFmt)</td><td class='right'>$($d.OutputFmt)</td><td class='right'>$($d.TotalFmt)</td><td class='right'><strong>$($d.CostFmt)</strong></td><td class='right' style='color:#10b981;'>$($d.SavingsFmt)</td></tr>")
+        [void]$sb.AppendLine("<tr><td><strong>$($d.Date)</strong></td><td class='right'>$($d.FxRateFmt)</td><td class='right'>$($d.Turns)</td><td class='right'>$($d.InputFmt)</td><td class='right'>$($d.CacheFmt)</td><td class='right'>$($d.OutputFmt)</td><td class='right'>$($d.TotalFmt)</td><td class='right'><strong>$($d.CostFmt)</strong></td><td class='right' style='color:#10b981;'>$($d.SavingsFmt)</td></tr>")
     }
     [void]$sb.AppendLine("</tbody></table></div></div></body></html>")
 

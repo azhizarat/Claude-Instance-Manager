@@ -77,8 +77,10 @@ $script:I18N = @{
         LblMetInstance        = "Instância:"
         LblMetProject         = "Projeto:"
         LblMetModel           = "Modelo:"
+        LblMetCurrency        = "Moeda (Câmbio Diário API):"
         ChkMetSubagents       = "Incluir Subagentes"
         BtnMetApply           = "Filtrar"
+        BtnMetRefreshFx       = "Atualizar Câmbio"
         BtnMetExport          = "Exportar HTML + CSV"
         BtnMetPricing         = "Tabela USD/1M"
         Period30d             = "Últimos 30 dias"
@@ -90,7 +92,7 @@ $script:I18N = @{
         FilterAllInstances    = "Todas as Instâncias"
         FilterAllProjects     = "Todos os Projetos"
         FilterAllModels       = "Todos os Modelos"
-        KpiCostTitle          = "CUSTO EQUIVALENTE API (USD)"
+        KpiCostTitle          = "CUSTO EQUIVALENTE API"
         KpiSavingsTitle       = "ECONOMIA DO PROMPT CACHE"
         KpiTokensTitle        = "TOTAL DE TOKENS PROCESSADOS"
         KpiTurnsTitle         = "REQUISIÇÕES / TURNOS DA API"
@@ -202,8 +204,10 @@ $script:I18N = @{
         LblMetInstance        = "Instance:"
         LblMetProject         = "Project:"
         LblMetModel           = "Model:"
+        LblMetCurrency        = "Currency (Daily API FX):"
         ChkMetSubagents       = "Include Subagents"
         BtnMetApply           = "Apply Filter"
+        BtnMetRefreshFx       = "Refresh FX"
         BtnMetExport          = "Export HTML + CSV"
         BtnMetPricing         = "USD/1M Rates"
         Period30d             = "Last 30 days"
@@ -215,7 +219,7 @@ $script:I18N = @{
         FilterAllInstances    = "All Instances"
         FilterAllProjects     = "All Projects"
         FilterAllModels       = "All Models"
-        KpiCostTitle          = "ESTIMATED API COST (USD)"
+        KpiCostTitle          = "ESTIMATED API COST"
         KpiSavingsTitle       = "PROMPT CACHE SAVINGS"
         KpiTokensTitle        = "TOTAL TOKENS PROCESSED"
         KpiTurnsTitle         = "API REQUESTS / TURNS"
@@ -592,12 +596,26 @@ function T([string]$Key) {
                             <ComboBox x:Name="CmbMetricsProject" Width="150" Height="28" Margin="0,0,10,4" VerticalContentAlignment="Center"/>
 
                             <TextBlock x:Name="LblMetModel" Text="Model:" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="0,0,4,4"/>
-                            <ComboBox x:Name="CmbMetricsModel" Width="145" Height="28" Margin="0,0,12,4" VerticalContentAlignment="Center"/>
+                            <ComboBox x:Name="CmbMetricsModel" Width="140" Height="28" Margin="0,0,10,4" VerticalContentAlignment="Center"/>
 
-                            <CheckBox x:Name="ChkMetricsSubagents" Content="Include Subagents" IsChecked="True" VerticalAlignment="Center" Margin="0,0,12,4"/>
+                            <TextBlock x:Name="LblMetCurrency" Text="Currency:" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="0,0,4,4"/>
+                            <ComboBox x:Name="CmbMetricsCurrency" Width="115" Height="28" Margin="0,0,10,4" VerticalContentAlignment="Center">
+                                <ComboBoxItem Content="USD ($)" Tag="USD" IsSelected="True"/>
+                                <ComboBoxItem Content="BRL (R$)" Tag="BRL"/>
+                                <ComboBoxItem Content="EUR (€)" Tag="EUR"/>
+                                <ComboBoxItem Content="GBP (£)" Tag="GBP"/>
+                                <ComboBoxItem Content="CAD (CA$)" Tag="CAD"/>
+                                <ComboBoxItem Content="AUD (A$)" Tag="AUD"/>
+                                <ComboBoxItem Content="JPY (¥)" Tag="JPY"/>
+                                <ComboBoxItem Content="CHF (Fr)" Tag="CHF"/>
+                                <ComboBoxItem Content="MXN (MX$)" Tag="MXN"/>
+                            </ComboBox>
 
-                            <Button x:Name="BtnApplyMetrics" Content="Filter" Background="#D97757" BorderBrush="#D97757" Foreground="White" Padding="12,5" Margin="0,0,8,4"/>
-                            <Button x:Name="BtnExportMetrics" Content="Export HTML + CSV" Background="#065F46" BorderBrush="#059669" Foreground="White" Padding="10,5" Margin="0,0,8,4"/>
+                            <CheckBox x:Name="ChkMetricsSubagents" Content="Include Subagents" IsChecked="True" VerticalAlignment="Center" Margin="0,0,10,4"/>
+
+                            <Button x:Name="BtnApplyMetrics" Content="Filter" Background="#D97757" BorderBrush="#D97757" Foreground="White" Padding="10,5" Margin="0,0,6,4"/>
+                            <Button x:Name="BtnRefreshFx" Content="Refresh FX" Padding="10,5" Margin="0,0,6,4"/>
+                            <Button x:Name="BtnExportMetrics" Content="Export HTML + CSV" Background="#065F46" BorderBrush="#059669" Foreground="White" Padding="10,5" Margin="0,0,6,4"/>
                             <Button x:Name="BtnEditPricing" Content="USD/1M Rates" Padding="10,5" Margin="0,0,0,4"/>
                         </WrapPanel>
                     </Border>
@@ -853,8 +871,10 @@ $TxtMetricsEndDate     = $Window.FindName("TxtMetricsEndDate")
 $CmbMetricsInstance    = $Window.FindName("CmbMetricsInstance")
 $CmbMetricsProject     = $Window.FindName("CmbMetricsProject")
 $CmbMetricsModel       = $Window.FindName("CmbMetricsModel")
+$CmbMetricsCurrency    = $Window.FindName("CmbMetricsCurrency")
 $ChkMetricsSubagents   = $Window.FindName("ChkMetricsSubagents")
 $BtnApplyMetrics       = $Window.FindName("BtnApplyMetrics")
+$BtnRefreshFx          = $Window.FindName("BtnRefreshFx")
 $BtnExportMetrics      = $Window.FindName("BtnExportMetrics")
 $BtnEditPricing        = $Window.FindName("BtnEditPricing")
 $TxtKpiCostVal         = $Window.FindName("TxtKpiCostVal")
@@ -964,8 +984,10 @@ function Apply-Localization {
     $Window.FindName("LblMetInstance").Text       = T "LblMetInstance"
     $Window.FindName("LblMetProject").Text        = T "LblMetProject"
     $Window.FindName("LblMetModel").Text          = T "LblMetModel"
+    $Window.FindName("LblMetCurrency").Text       = T "LblMetCurrency"
     $ChkMetricsSubagents.Content                  = T "ChkMetSubagents"
     $BtnApplyMetrics.Content                      = T "BtnMetApply"
+    $BtnRefreshFx.Content                         = T "BtnMetRefreshFx"
     $BtnExportMetrics.Content                     = T "BtnMetExport"
     $BtnEditPricing.Content                       = T "BtnMetPricing"
     $Window.FindName("CiPeriod30d").Content       = T "Period30d"
@@ -1066,15 +1088,21 @@ function Initialize-MetricsFilterCombos([switch]$ForceRefresh) {
 }
 
 function Refresh-MetricsUI([switch]$ForceRefresh) {
-    if (-not $script:MetricsInitialized -or $ForceRefresh) {
-        Initialize-MetricsFilterCombos -ForceRefresh:$ForceRefresh
-        $script:MetricsInitialized = $true
+    $script:SuppressMetricsEvents = $true
+    try {
+        if (-not $script:MetricsInitialized -or $ForceRefresh) {
+            Initialize-MetricsFilterCombos -ForceRefresh:$ForceRefresh
+            $script:MetricsInitialized = $true
+        }
+    } finally {
+        $script:SuppressMetricsEvents = $false
     }
 
     $period = if ($CmbMetricsPeriod.SelectedItem -and $CmbMetricsPeriod.SelectedItem.Tag) { [string]$CmbMetricsPeriod.SelectedItem.Tag } else { "30d" }
     $instId = if ($CmbMetricsInstance.SelectedItem -and $CmbMetricsInstance.SelectedItem.Tag) { [string]$CmbMetricsInstance.SelectedItem.Tag } else { "ALL" }
     $proj   = if ($CmbMetricsProject.SelectedItem -and $CmbMetricsProject.SelectedItem.Tag) { [string]$CmbMetricsProject.SelectedItem.Tag } else { "ALL" }
     $mod    = if ($CmbMetricsModel.SelectedItem -and $CmbMetricsModel.SelectedItem.Tag) { [string]$CmbMetricsModel.SelectedItem.Tag } else { "ALL" }
+    $curr   = if ($CmbMetricsCurrency.SelectedItem -and $CmbMetricsCurrency.SelectedItem.Tag) { [string]$CmbMetricsCurrency.SelectedItem.Tag } else { "USD" }
     $incSub = ($ChkMetricsSubagents.IsChecked -eq $true)
 
     $rep = Get-ClaudeMetricsReport `
@@ -1085,19 +1113,24 @@ function Refresh-MetricsUI([switch]$ForceRefresh) {
         -ProjectName $proj `
         -Model $mod `
         -IncludeSubagents $incSub `
+        -Currency $curr `
+        -Language $script:CurrentLang `
         -ForceRefresh:$ForceRefresh
 
     $script:CurrentMetricsReport = $rep
     $s = $rep.Summary
 
+    $Window.FindName("LblKpiCost").Text = "$(T 'KpiCostTitle') ($($s.Currency))"
     $TxtKpiCostVal.Text    = $s.TotalCostFmt
-    $TxtKpiCostSub.Text    = "Uncached Value: $($s.UncachedCostFmt)"
+    $uncachedWord = if ($script:CurrentLang -eq "pt-BR") { "Sem Cache" } else { "Without Cache" }
+    $fxHint = if ($s.Currency -ne "USD") { " | 1 USD = $($s.SpotRateFmt) $($s.Currency)" } else { "" }
+    $TxtKpiCostSub.Text    = "${uncachedWord}: $($s.UncachedCostFmt)${fxHint}"
     $TxtKpiSavingsVal.Text = $s.CacheSavingsFmt
     $TxtKpiSavingsSub.Text = "Cache Hit Rate: $($s.CacheHitRatePct)"
     $TxtKpiTokensVal.Text  = $s.TotalTokensFmt
     $TxtKpiTokensSub.Text  = "Out: $($s.OutputTokensFmt) | Cache Read: $($s.CacheReadFmt)"
-    $TxtKpiTurnsVal.Text   = "$($s.TotalMessages)"
-    $TxtKpiTurnsSub.Text   = "Subagents: $($s.SubagentMessages)"
+    $TxtKpiTurnsVal.Text   = "$($s.TotalMessagesFmt)"
+    $TxtKpiTurnsSub.Text   = "Subagents: $($s.SubagentMessagesFmt)"
 
     $DgMetricsProjects.ItemsSource  = $rep.ByProject
     $DgMetricsModels.ItemsSource    = $rep.ByModel
@@ -1105,7 +1138,20 @@ function Refresh-MetricsUI([switch]$ForceRefresh) {
     $DgMetricsInstances.ItemsSource = $rep.ByInstance
     $DgMetricsSessions.ItemsSource  = $rep.BySession
 
-    Set-Status "Metrics updated: $($s.TotalMessages) turns | $($s.TotalTokensFmt) tokens | $($s.TotalCostFmt) USD (Saved $($s.CacheSavingsFmt) via Prompt Cache)."
+    Set-Status "Metrics ($($s.Currency) via $($s.FxSource)): $($s.TotalMessagesFmt) turns | $($s.TotalTokensFmt) tokens | $($s.TotalCostFmt)."
+}
+
+function Invoke-MetricsRefreshDeferred([switch]$ForceRefresh) {
+    if ($script:SuppressMetricsEvents) { return }
+    $loadMsg = if ($script:CurrentLang -eq "pt-BR") { "Calculando métricas e cotações em segundo plano..." } else { "Computing metrics and exchange rates in background..." }
+    Set-Status $loadMsg
+    $forceFlag = [bool]$ForceRefresh
+    [void]$Window.Dispatcher.BeginInvoke(
+        [System.Windows.Threading.DispatcherPriority]::Background,
+        [Action]{
+            Refresh-MetricsUI -ForceRefresh:$forceFlag
+        }
+    )
 }
 
 function Refresh-ProtocolUI {
@@ -1281,10 +1327,13 @@ function Refresh-InstancesUI {
             $statusTxt = New-Object System.Windows.Controls.TextBlock
             $statusTxt.FontSize = 11
             $statusTxt.FontWeight = "SemiBold"
+            $uiCulture = Get-CultureForLanguage -Language $script:CurrentLang
+            $ramStr = ([double]$inst.RamMB).ToString("N1", $uiCulture)
+            $sessCntStr = ([double]$inst.SessionCount).ToString("N0", $uiCulture)
             if ($inst.IsRunning) {
                 $statusBorder.Background = $BrushConv.ConvertFromString("#064E3B")
                 $statusTxt.Foreground = $BrushConv.ConvertFromString("#34D399")
-                $statusTxt.Text = "$(T 'StatusRunning') ($($inst.ProcessCount) proc | $($inst.RamMB) MB)"
+                $statusTxt.Text = "$(T 'StatusRunning') ($($inst.ProcessCount) proc | $ramStr MB)"
             } else {
                 $statusBorder.Background = $BrushConv.ConvertFromString("#27272A")
                 $statusTxt.Foreground = $BrushConv.ConvertFromString("#A1A1AA")
@@ -1297,7 +1346,7 @@ function Refresh-InstancesUI {
             $infoTxt = New-Object System.Windows.Controls.TextBlock
             $dispLabel = if ($inst.DispatchEnabled) { "ON" } else { "OFF" }
             $vmLabel = if ($inst.VmDiskPresent) { "OK" } else { "—" }
-            $infoTxt.Text = "AccountUUID: $($inst.AccountUuid)   |   OrgUUID: $($inst.OrgUuid)`nSessions: $($inst.SessionCount)   |   Dispatch: $dispLabel   |   VM Disk: $vmLabel"
+            $infoTxt.Text = "AccountUUID: $($inst.AccountUuid)   |   OrgUUID: $($inst.OrgUuid)`nSessions: $sessCntStr   |   Dispatch: $dispLabel   |   VM Disk: $vmLabel"
             $infoTxt.FontSize = 11
             $infoTxt.Foreground = $BrushConv.ConvertFromString("#A1A1AA")
             $infoTxt.Margin = New-Object System.Windows.Thickness(0, 8, 0, 10)
@@ -1472,7 +1521,7 @@ $CmbLanguage.Add_SelectionChanged({
         Refresh-SessionLists
         Refresh-ProtocolUI
         Refresh-UpdateAndBackupUI
-        if ($script:MetricsInitialized) { Refresh-MetricsUI }
+        if ($script:MetricsInitialized) { Invoke-MetricsRefreshDeferred }
         Set-Status (T "MsgReady")
     }
 })
@@ -1481,7 +1530,7 @@ $MainTabControl.Add_SelectionChanged({
     param($sender, $e)
     if ($e.Source -eq $MainTabControl -and $MainTabControl.SelectedItem -eq $TabMetrics) {
         if (-not $script:MetricsInitialized) {
-            Refresh-MetricsUI
+            Invoke-MetricsRefreshDeferred
         }
     }
 })
@@ -1493,27 +1542,34 @@ $BtnRefreshAll.Add_Click({
     Refresh-ProtocolUI
     Refresh-UpdateAndBackupUI
     if ($script:MetricsInitialized -or $MainTabControl.SelectedItem -eq $TabMetrics) {
-        Refresh-MetricsUI -ForceRefresh
+        Invoke-MetricsRefreshDeferred -ForceRefresh
     }
     Set-Status (T "MsgReady")
 })
 
 # Tab 3 Metrics Events
-$BtnApplyMetrics.Add_Click({ Refresh-MetricsUI })
+$BtnApplyMetrics.Add_Click({ Invoke-MetricsRefreshDeferred })
+$BtnRefreshFx.Add_Click({
+    Get-ClaudeFxCache -ForceOnlineUpdate | Out-Null
+    Invoke-MetricsRefreshDeferred
+})
 $CmbMetricsPeriod.Add_SelectionChanged({
-    if ($script:MetricsInitialized) { Refresh-MetricsUI }
+    if ($script:MetricsInitialized) { Invoke-MetricsRefreshDeferred }
 })
 $CmbMetricsInstance.Add_SelectionChanged({
-    if ($script:MetricsInitialized) { Refresh-MetricsUI }
+    if ($script:MetricsInitialized) { Invoke-MetricsRefreshDeferred }
 })
 $CmbMetricsProject.Add_SelectionChanged({
-    if ($script:MetricsInitialized) { Refresh-MetricsUI }
+    if ($script:MetricsInitialized) { Invoke-MetricsRefreshDeferred }
 })
 $CmbMetricsModel.Add_SelectionChanged({
-    if ($script:MetricsInitialized) { Refresh-MetricsUI }
+    if ($script:MetricsInitialized) { Invoke-MetricsRefreshDeferred }
+})
+$CmbMetricsCurrency.Add_SelectionChanged({
+    if ($script:MetricsInitialized) { Invoke-MetricsRefreshDeferred }
 })
 $ChkMetricsSubagents.Add_Click({
-    if ($script:MetricsInitialized) { Refresh-MetricsUI }
+    if ($script:MetricsInitialized) { Invoke-MetricsRefreshDeferred }
 })
 
 $BtnExportMetrics.Add_Click({
@@ -1888,6 +1944,7 @@ $Window.Add_ContentRendered({
     Refresh-SessionLists
     Refresh-ProtocolUI
     Refresh-UpdateAndBackupUI
+    Start-MetricsBackgroundPrewarm
     Set-Status (T "MsgReady")
 })
 

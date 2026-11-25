@@ -127,9 +127,13 @@ Assert-True (Test-Path $coreMetricsPath) "Task 5: src/Core-Metrics.ps1 exists"
 if (Test-Path $coreMetricsPath) {
     . $coreMetricsPath
     $swMet = [System.Diagnostics.Stopwatch]::StartNew()
-    $rep = Get-ClaudeMetricsReport -Period "all" -IncludeSubagents $true
+    $rep = Get-ClaudeMetricsReport -Period "30d" -IncludeSubagents $true -Currency "BRL" -Language "pt-BR"
     $swMet.Stop()
-    Assert-True ($null -ne $rep -and $null -ne $rep.Summary) "Task 5: Get-ClaudeMetricsReport computed ($($rep.Summary.TotalMessages) turns, $($rep.Summary.TotalCostFmt) USD in $($swMet.ElapsedMilliseconds) ms)"
+    Assert-True ($null -ne $rep -and $null -ne $rep.Summary) "Task 5: Get-ClaudeMetricsReport (BRL, pt-BR) computed ($($rep.Summary.TotalMessagesFmt) turns, $($rep.Summary.TotalCostFmt) in $($swMet.ElapsedMilliseconds) ms)"
+
+    $numPt = Format-LocaleNumber -Value 12345.67 -Decimals 2 -Culture (Get-CultureForLanguage "pt-BR")
+    $numEn = Format-LocaleNumber -Value 12345.67 -Decimals 2 -Culture (Get-CultureForLanguage "en-US")
+    Assert-True ($numPt -eq "12.345,67" -and $numEn -eq "12,345.67") "Task 5: Locale-aware number formatting matches pt-BR ($numPt) and en-US ($numEn)"
 }
 
 # --- Task 6: Main WPF GUI XAML Check ---

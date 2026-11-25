@@ -6,7 +6,7 @@ $script:CIMRootDir = Join-Path $env:LOCALAPPDATA "Claude-Instances"
 $script:CIMStateFile = Join-Path $script:CIMRootDir "cim-state.json"
 $script:CIMIconsDir = Join-Path $script:CIMRootDir "icons"
 $script:CIMBackupsDir = Join-Path $script:CIMRootDir "Backups"
-$script:CIMNativeDllPath = Join-Path $script:CIMRootDir "CIMNative.v7.dll"
+$script:CIMNativeDllPath = Join-Path $script:CIMRootDir "CIMNative.v8.dll"
 $script:ReservedFolderNames = @("icons", "Backups", "Manager", "logs", "temp")
 $script:CachedClaudeExePath = $null
 $script:PidCommandLineCache = @{}
@@ -312,8 +312,28 @@ namespace CIMNative {
     }
 
     public static class FastMetricsScanner {
+        private static readonly object SyncLock = new object();
         private static readonly Dictionary<string, CachedJsonlFile> FileCache = new Dictionary<string, CachedJsonlFile>(StringComparer.OrdinalIgnoreCase);
+        private static List<TurnUsageRecord> LastFullScanResult = null;
+        private static DateTime LastFullScanTime = DateTime.MinValue;
         private static bool DiskCacheLoaded = false;
+        private static bool PrewarmRunning = false;
+
+        public static void StartBackgroundPrewarm(string claudeProjectsRoot) {
+            if (PrewarmRunning) return;
+            PrewarmRunning = true;
+            System.Threading.Tasks.Task.Run(() => {
+                try {
+                    ScanAllProjects(claudeProjectsRoot, false);
+                } catch {} finally {
+                    PrewarmRunning = false;
+                }
+            });
+        }
+
+        public static List<TurnUsageRecord> ScanAllProjects(string claudeProjectsRoot) {
+            return ScanAllProjects(claudeProjectsRoot, false);
+        }
 
         private static readonly Regex RxMsgId = new Regex("\"id\"\\s*:\\s*\"(msg_[^\"]+)\"", RegexOptions.Compiled);
         private static readonly Regex RxUuid = new Regex("\"uuid\"\\s*:\\s*\"([^\"]+)\"", RegexOptions.Compiled);
@@ -434,42 +454,50 @@ namespace CIMNative {
             return sum;
         }
 
-        public static List<TurnUsageRecord> ScanAllProjects(string claudeProjectsRoot) {
-            var allRecords = new List<TurnUsageRecord>();
-            if (string.IsNullOrEmpty(claudeProjectsRoot) || !Directory.Exists(claudeProjectsRoot)) return allRecords;
-
-            LoadDiskCacheIfNeeded();
-            bool cacheDirty = false;
-
-            foreach (string projDir in Directory.EnumerateDirectories(claudeProjectsRoot)) {
-                string encodedProjName = Path.GetFileName(projDir);
-                foreach (string jsonlFile in Directory.EnumerateFiles(projDir, "*.jsonl", SearchOption.AllDirectories)) {
-                    try {
-                        var fi = new FileInfo(jsonlFile);
-                        CachedJsonlFile cached;
-                        if (FileCache.TryGetValue(jsonlFile, out cached)) {
-                            if (cached.LastWriteTicks == fi.LastWriteTimeUtc.Ticks && cached.FileLength == fi.Length) {
-                                allRecords.AddRange(cached.Records);
-                                continue;
-                            }
-                        }
-
-                        var fileRecords = ParseJsonlFile(jsonlFile, encodedProjName, projDir);
-                        FileCache[jsonlFile] = new CachedJsonlFile {
-                            LastWriteTicks = fi.LastWriteTimeUtc.Ticks,
-                            FileLength = fi.Length,
-                            Records = fileRecords
-                        };
-                        cacheDirty = true;
-                        allRecords.AddRange(fileRecords);
-                    } catch {}
+        public static List<TurnUsageRecord> ScanAllProjects(string claudeProjectsRoot, bool forceDiskRescan) {
+            lock (SyncLock) {
+                if (!forceDiskRescan && LastFullScanResult != null && (DateTime.UtcNow - LastFullScanTime).TotalSeconds < 30) {
+                    return LastFullScanResult;
                 }
-            }
 
-            if (cacheDirty) {
-                SaveDiskCache();
+                var allRecords = new List<TurnUsageRecord>();
+                if (string.IsNullOrEmpty(claudeProjectsRoot) || !Directory.Exists(claudeProjectsRoot)) return allRecords;
+
+                LoadDiskCacheIfNeeded();
+                bool cacheDirty = false;
+
+                foreach (string projDir in Directory.EnumerateDirectories(claudeProjectsRoot)) {
+                    string encodedProjName = Path.GetFileName(projDir);
+                    foreach (string jsonlFile in Directory.EnumerateFiles(projDir, "*.jsonl", SearchOption.AllDirectories)) {
+                        try {
+                            var fi = new FileInfo(jsonlFile);
+                            CachedJsonlFile cached;
+                            if (FileCache.TryGetValue(jsonlFile, out cached)) {
+                                if (cached.LastWriteTicks == fi.LastWriteTimeUtc.Ticks && cached.FileLength == fi.Length) {
+                                    allRecords.AddRange(cached.Records);
+                                    continue;
+                                }
+                            }
+
+                            var fileRecords = ParseJsonlFile(jsonlFile, encodedProjName, projDir);
+                            FileCache[jsonlFile] = new CachedJsonlFile {
+                                LastWriteTicks = fi.LastWriteTimeUtc.Ticks,
+                                FileLength = fi.Length,
+                                Records = fileRecords
+                            };
+                            cacheDirty = true;
+                            allRecords.AddRange(fileRecords);
+                        } catch {}
+                    }
+                }
+
+                if (cacheDirty) {
+                    SaveDiskCache();
+                }
+                LastFullScanResult = allRecords;
+                LastFullScanTime = DateTime.UtcNow;
+                return allRecords;
             }
-            return allRecords;
         }
 
         private static List<TurnUsageRecord> ParseJsonlFile(string filePath, string encodedProjName, string projRootDir) {
