@@ -28,11 +28,7 @@ function Get-ClaudeInstanceSessions([string]$InstanceId, [switch]$ForceRefresh) 
     if (-not $inst) { return @() }
 
     Initialize-CIMNativeEngine
-    $rawList = [CIMNative.FastSessionScanner]::ScanInstance($inst.DataDir)
-    $sorted = @($rawList | Sort-Object @{Expression="ProjectName"; Ascending=$true}, @{Expression="LastActivityAt"; Descending=$false})
-    # Reverse sort by LastActivityAt within ProjectName
-    $sorted = @($rawList | Sort-Object @{Expression="ProjectName"; Ascending=$true}, @{Expression={ -$_.LastActivityAt }; Ascending=$true})
-
+    $sorted = @([CIMNative.FastSessionScanner]::ScanInstance($inst.DataDir))
     $script:SessionMemoryCache[$InstanceId] = $sorted
     return $sorted
 }

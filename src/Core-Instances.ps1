@@ -6,7 +6,7 @@ $script:CIMRootDir = Join-Path $env:LOCALAPPDATA "Claude-Instances"
 $script:CIMStateFile = Join-Path $script:CIMRootDir "cim-state.json"
 $script:CIMIconsDir = Join-Path $script:CIMRootDir "icons"
 $script:CIMBackupsDir = Join-Path $script:CIMRootDir "Backups"
-$script:CIMNativeDllPath = Join-Path $script:CIMRootDir "CIMNative.v8.dll"
+$script:CIMNativeDllPath = Join-Path $script:CIMRootDir "CIMNative.v9.dll"
 $script:ReservedFolderNames = @("icons", "Backups", "Manager", "logs", "temp")
 $script:CachedClaudeExePath = $null
 $script:PidCommandLineCache = @{}
@@ -284,6 +284,11 @@ namespace CIMNative {
                     } catch {}
                 }
             }
+            list.Sort((a, b) => {
+                int cmp = string.Compare(a.ProjectName, b.ProjectName, StringComparison.OrdinalIgnoreCase);
+                if (cmp != 0) return cmp;
+                return b.LastActivityAt.CompareTo(a.LastActivityAt);
+            });
             return list;
         }
     }
