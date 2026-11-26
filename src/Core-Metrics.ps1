@@ -354,6 +354,13 @@ function Get-RawClaudeTurnRecords([switch]$ForceRefresh) {
             CacheReadTokens  = [int64]$r.CacheReadTokens
             CacheWriteTokens = [int64]$r.CacheWriteTokens
             TotalTokens      = [int64]($r.InputTokens + $r.OutputTokens + $r.CacheReadTokens + $r.CacheWriteTokens)
+            LinesAdded       = [int64]$r.LinesAdded
+            LinesRemoved     = [int64]$r.LinesRemoved
+            EditCount        = [int]$r.EditCount
+            BashCount        = [int]$r.BashCount
+            ReadSearchCount  = [int]$r.ReadSearchCount
+            McpCount         = [int]$r.McpCount
+            TotalToolCalls   = [int]$r.TotalToolCalls
         })
     }
 
@@ -436,6 +443,14 @@ function Get-ClaudeMetricsReport {
     $totalCostConv = [double]0.0
     $totalUncachedConv = [double]0.0
 
+    $totalLinesAdd = [int64]0
+    $totalLinesRem = [int64]0
+    $totalEdits = 0
+    $totalBash = 0
+    $totalReadSearch = 0
+    $totalMcp = 0
+    $totalTools = 0
+
     $projAgg = @{}
     $modelAgg = @{}
     $dayAgg = @{}
@@ -485,6 +500,14 @@ function Get-ClaudeMetricsReport {
         $totalCostConv += $cost
         $totalUncachedConv += $uncached
 
+        $totalLinesAdd += $r.LinesAdded
+        $totalLinesRem += $r.LinesRemoved
+        $totalEdits += $r.EditCount
+        $totalBash += $r.BashCount
+        $totalReadSearch += $r.ReadSearchCount
+        $totalMcp += $r.McpCount
+        $totalTools += $r.TotalToolCalls
+
         # 1. Project Aggregation
         $pk = if ($r.ProjectName) { $r.ProjectName } else { "(Unknown)" }
         if (-not $projAgg.ContainsKey($pk)) {
@@ -498,6 +521,11 @@ function Get-ClaudeMetricsReport {
                 CacheWriteTokens = [int64]0
                 CacheReadTokens  = [int64]0
                 TotalTokens      = [int64]0
+                LinesAdded       = [int64]0
+                LinesRemoved     = [int64]0
+                EditCount        = 0
+                BashCount        = 0
+                TotalTools       = 0
                 Cost             = [double]0.0
                 Savings          = [double]0.0
             }
@@ -509,6 +537,11 @@ function Get-ClaudeMetricsReport {
         $pa.CacheWriteTokens += $r.CacheWriteTokens
         $pa.CacheReadTokens += $r.CacheReadTokens
         $pa.TotalTokens += $r.TotalTokens
+        $pa.LinesAdded += $r.LinesAdded
+        $pa.LinesRemoved += $r.LinesRemoved
+        $pa.EditCount += $r.EditCount
+        $pa.BashCount += $r.BashCount
+        $pa.TotalTools += $r.TotalToolCalls
         $pa.Cost += $cost
         $pa.Savings += $savings
 
@@ -523,6 +556,8 @@ function Get-ClaudeMetricsReport {
                 CacheWriteTokens = [int64]0
                 CacheReadTokens  = [int64]0
                 TotalTokens      = [int64]0
+                EditCount        = 0
+                TotalTools       = 0
                 Cost             = [double]0.0
                 Savings          = [double]0.0
             }
@@ -534,21 +569,27 @@ function Get-ClaudeMetricsReport {
         $ma.CacheWriteTokens += $r.CacheWriteTokens
         $ma.CacheReadTokens += $r.CacheReadTokens
         $ma.TotalTokens += $r.TotalTokens
+        $ma.EditCount += $r.EditCount
+        $ma.TotalTools += $r.TotalToolCalls
         $ma.Cost += $cost
         $ma.Savings += $savings
 
         # 3. Daily Aggregation
         if (-not $dayAgg.ContainsKey($dk)) {
             $dayAgg[$dk] = @{
-                Date        = $dk
-                FxRate      = $dayFxRate
-                Messages    = 0
-                InputTokens = [int64]0
-                OutputTokens= [int64]0
-                CacheTokens = [int64]0
-                TotalTokens = [int64]0
-                Cost        = [double]0.0
-                Savings     = [double]0.0
+                Date         = $dk
+                FxRate       = $dayFxRate
+                Messages     = 0
+                InputTokens  = [int64]0
+                OutputTokens = [int64]0
+                CacheTokens  = [int64]0
+                TotalTokens  = [int64]0
+                LinesAdded   = [int64]0
+                LinesRemoved = [int64]0
+                EditCount    = 0
+                TotalTools   = 0
+                Cost         = [double]0.0
+                Savings      = [double]0.0
             }
         }
         $da = $dayAgg[$dk]
@@ -557,6 +598,10 @@ function Get-ClaudeMetricsReport {
         $da.OutputTokens += $r.OutputTokens
         $da.CacheTokens += ($r.CacheReadTokens + $r.CacheWriteTokens)
         $da.TotalTokens += $r.TotalTokens
+        $da.LinesAdded += $r.LinesAdded
+        $da.LinesRemoved += $r.LinesRemoved
+        $da.EditCount += $r.EditCount
+        $da.TotalTools += $r.TotalToolCalls
         $da.Cost += $cost
         $da.Savings += $savings
 
@@ -567,6 +612,10 @@ function Get-ClaudeMetricsReport {
                 InstanceName = $ik
                 Messages     = 0
                 TotalTokens  = [int64]0
+                LinesAdded   = [int64]0
+                LinesRemoved = [int64]0
+                EditCount    = 0
+                TotalTools   = 0
                 Cost         = [double]0.0
                 Savings      = [double]0.0
             }
@@ -574,6 +623,10 @@ function Get-ClaudeMetricsReport {
         $ia = $instAgg[$ik]
         $ia.Messages += $tCount
         $ia.TotalTokens += $r.TotalTokens
+        $ia.LinesAdded += $r.LinesAdded
+        $ia.LinesRemoved += $r.LinesRemoved
+        $ia.EditCount += $r.EditCount
+        $ia.TotalTools += $r.TotalToolCalls
         $ia.Cost += $cost
         $ia.Savings += $savings
 
@@ -589,6 +642,10 @@ function Get-ClaudeMetricsReport {
                 LastDate     = $r.DateLocal
                 Messages     = 0
                 TotalTokens  = [int64]0
+                LinesAdded   = [int64]0
+                LinesRemoved = [int64]0
+                EditCount    = 0
+                TotalTools   = 0
                 Cost         = [double]0.0
                 Savings      = [double]0.0
             }
@@ -596,6 +653,10 @@ function Get-ClaudeMetricsReport {
         $sa = $sessAgg[$sk]
         $sa.Messages += $tCount
         $sa.TotalTokens += $r.TotalTokens
+        $sa.LinesAdded += $r.LinesAdded
+        $sa.LinesRemoved += $r.LinesRemoved
+        $sa.EditCount += $r.EditCount
+        $sa.TotalTools += $r.TotalToolCalls
         $sa.Cost += $cost
         $sa.Savings += $savings
         if ($r.DateLocal -gt $sa.LastDate) { $sa.LastDate = $r.DateLocal }
@@ -612,6 +673,11 @@ function Get-ClaudeMetricsReport {
             ProjectName  = $_.ProjectName
             InstanceName = $_.InstanceName
             Turns        = Format-LocaleNumber -Value $_.Messages -Decimals 0 -Culture $culture
+            LinesAddFmt  = "+" + (Format-LocaleNumber -Value $_.LinesAdded -Decimals 0 -Culture $culture)
+            LinesRemFmt  = "-" + (Format-LocaleNumber -Value $_.LinesRemoved -Decimals 0 -Culture $culture)
+            EditsFmt     = Format-LocaleNumber -Value $_.EditCount -Decimals 0 -Culture $culture
+            BashFmt      = Format-LocaleNumber -Value $_.BashCount -Decimals 0 -Culture $culture
+            ToolsFmt     = Format-LocaleNumber -Value $_.TotalTools -Decimals 0 -Culture $culture
             InputFmt     = Format-TokenCount ($_.InputTokens + $_.CacheWriteTokens) $culture
             CacheReadFmt = Format-TokenCount $_.CacheReadTokens $culture
             OutputFmt    = Format-TokenCount $_.OutputTokens $culture
@@ -629,6 +695,8 @@ function Get-ClaudeMetricsReport {
         [PSCustomObject]@{
             Model        = $_.Model
             Turns        = Format-LocaleNumber -Value $_.Messages -Decimals 0 -Culture $culture
+            EditsFmt     = Format-LocaleNumber -Value $_.EditCount -Decimals 0 -Culture $culture
+            ToolsFmt     = Format-LocaleNumber -Value $_.TotalTools -Decimals 0 -Culture $culture
             InputFmt     = Format-TokenCount ($_.InputTokens + $_.CacheWriteTokens) $culture
             CacheReadFmt = Format-TokenCount $_.CacheReadTokens $culture
             OutputFmt    = Format-TokenCount $_.OutputTokens $culture
@@ -654,6 +722,10 @@ function Get-ClaudeMetricsReport {
             Date        = $_.Date
             FxRateFmt   = if ($Currency -eq "USD") { "1.00" } else { $_.FxRate.ToString("N4", $culture) }
             Turns       = Format-LocaleNumber -Value $_.Messages -Decimals 0 -Culture $culture
+            LinesAddFmt = "+" + (Format-LocaleNumber -Value $_.LinesAdded -Decimals 0 -Culture $culture)
+            LinesRemFmt = "-" + (Format-LocaleNumber -Value $_.LinesRemoved -Decimals 0 -Culture $culture)
+            EditsFmt    = Format-LocaleNumber -Value $_.EditCount -Decimals 0 -Culture $culture
+            ToolsFmt    = Format-LocaleNumber -Value $_.TotalTools -Decimals 0 -Culture $culture
             InputFmt    = Format-TokenCount $_.InputTokens $culture
             OutputFmt   = Format-TokenCount $_.OutputTokens $culture
             CacheFmt    = Format-TokenCount $_.CacheTokens $culture
@@ -671,6 +743,10 @@ function Get-ClaudeMetricsReport {
         [PSCustomObject]@{
             InstanceName = $_.InstanceName
             Turns        = Format-LocaleNumber -Value $_.Messages -Decimals 0 -Culture $culture
+            LinesAddFmt  = "+" + (Format-LocaleNumber -Value $_.LinesAdded -Decimals 0 -Culture $culture)
+            LinesRemFmt  = "-" + (Format-LocaleNumber -Value $_.LinesRemoved -Decimals 0 -Culture $culture)
+            EditsFmt     = Format-LocaleNumber -Value $_.EditCount -Decimals 0 -Culture $culture
+            ToolsFmt     = Format-LocaleNumber -Value $_.TotalTools -Decimals 0 -Culture $culture
             TotalFmt     = Format-TokenCount $_.TotalTokens $culture
             CostRaw      = [math]::Round($_.Cost, 2)
             CostFmt      = Format-CurrencyValue -Amount $_.Cost -CurrencyCode $Currency -Culture $culture
@@ -687,12 +763,25 @@ function Get-ClaudeMetricsReport {
             Model        = $_.Model
             LastDate     = $_.LastDate
             Turns        = Format-LocaleNumber -Value $_.Messages -Decimals 0 -Culture $culture
+            LinesAddFmt  = "+" + (Format-LocaleNumber -Value $_.LinesAdded -Decimals 0 -Culture $culture)
+            LinesRemFmt  = "-" + (Format-LocaleNumber -Value $_.LinesRemoved -Decimals 0 -Culture $culture)
+            EditsFmt     = Format-LocaleNumber -Value $_.EditCount -Decimals 0 -Culture $culture
+            ToolsFmt     = Format-LocaleNumber -Value $_.TotalTools -Decimals 0 -Culture $culture
             TotalFmt     = Format-TokenCount $_.TotalTokens $culture
             CostRaw      = [math]::Round($_.Cost, 2)
             CostFmt      = Format-CurrencyValue -Amount $_.Cost -CurrencyCode $Currency -Culture $culture
             SavingsFmt   = Format-CurrencyValue -Amount $_.Savings -CurrencyCode $Currency -Culture $culture
         }
     })
+
+    $otherTools = [Math]::Max(0, $totalTools - ($totalEdits + $totalBash + $totalReadSearch + $totalMcp))
+    $byToolList = @(
+        [PSCustomObject]@{ Category = "Code Edits & Writes (Edit / MultiEdit / Write)"; Calls = Format-LocaleNumber -Value $totalEdits -Decimals 0 -Culture $culture; Details = "+$(Format-LocaleNumber -Value $totalLinesAdd -Decimals 0 -Culture $culture) / -$(Format-LocaleNumber -Value $totalLinesRem -Decimals 0 -Culture $culture) lines" },
+        [PSCustomObject]@{ Category = "File Inspection & Search (Read / Grep / Glob)";  Calls = Format-LocaleNumber -Value $totalReadSearch -Decimals 0 -Culture $culture; Details = "Codebase exploration" },
+        [PSCustomObject]@{ Category = "Terminal Execution (Bash)";                      Calls = Format-LocaleNumber -Value $totalBash -Decimals 0 -Culture $culture; Details = "Shell commands" },
+        [PSCustomObject]@{ Category = "MCP Connectors (mcp__*)";                        Calls = Format-LocaleNumber -Value $totalMcp -Decimals 0 -Culture $culture; Details = "External MCP tools" },
+        [PSCustomObject]@{ Category = "Subagents & Other Tools (Agent / Task / Web)";   Calls = Format-LocaleNumber -Value $otherTools -Decimals 0 -Culture $culture; Details = "Subagent spawns & tasks" }
+    )
 
     return [PSCustomObject]@{
         Summary = [PSCustomObject]@{
@@ -715,6 +804,16 @@ function Get-ClaudeMetricsReport {
             TotalMessagesFmt   = Format-LocaleNumber -Value $totalMsgs -Decimals 0 -Culture $culture
             SubagentMessages   = $subagentMsgs
             SubagentMessagesFmt= Format-LocaleNumber -Value $subagentMsgs -Decimals 0 -Culture $culture
+            LinesAdded         = $totalLinesAdd
+            LinesAddedFmt      = "+" + (Format-LocaleNumber -Value $totalLinesAdd -Decimals 0 -Culture $culture)
+            LinesRemoved       = $totalLinesRem
+            LinesRemovedFmt    = "-" + (Format-LocaleNumber -Value $totalLinesRem -Decimals 0 -Culture $culture)
+            EditCount          = $totalEdits
+            EditCountFmt       = Format-LocaleNumber -Value $totalEdits -Decimals 0 -Culture $culture
+            BashCount          = $totalBash
+            BashCountFmt       = Format-LocaleNumber -Value $totalBash -Decimals 0 -Culture $culture
+            TotalToolCalls     = $totalTools
+            TotalToolCallsFmt  = Format-LocaleNumber -Value $totalTools -Decimals 0 -Culture $culture
             TotalCostUSD       = [math]::Round($totalCostConv, 2)
             TotalCostFmt       = Format-CurrencyValue -Amount $totalCostConv -CurrencyCode $Currency -Culture $culture
             UncachedCostUSD    = [math]::Round($totalUncachedConv, 2)
@@ -730,6 +829,7 @@ function Get-ClaudeMetricsReport {
         ByDay      = $byDayList
         ByInstance = $byInstanceList
         BySession  = $bySessionList
+        ByTool     = $byToolList
     }
 }
 
@@ -748,7 +848,7 @@ function Export-ClaudeMetricsReport {
     $csvPath = Join-Path $OutputDirectory "CIM-Metrics-Projects-$ts.csv"
     $htmlPath = Join-Path $OutputDirectory "CIM-Executive-Report-$ts.html"
 
-    $Report.ByProject | Select-Object ProjectName,InstanceName,Turns,TotalTokens,TotalFmt,CostRaw,CostFmt,SavingsFmt,SharePct |
+    $Report.ByProject | Select-Object ProjectName,InstanceName,Turns,LinesAddFmt,LinesRemFmt,EditsFmt,BashFmt,ToolsFmt,TotalTokens,TotalFmt,CostRaw,CostFmt,SavingsFmt,SharePct |
         Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
 
     $s = $Report.Summary
@@ -759,22 +859,22 @@ function Export-ClaudeMetricsReport {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Claude Instance Manager — FinOps &amp; Token Usage Report ($($s.Currency))</title>
+<title>Claude Instance Manager — FinOps &amp; Code Telemetry Report ($($s.Currency))</title>
 <style>
   body { background: #0f0f12; color: #f4f4f5; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 28px; }
-  .wrap { max-width: 1120px; margin: 0 auto; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
   .header { background: #18181b; border: 1px solid #27272a; border-left: 4px solid #d97757; border-radius: 10px; padding: 18px 24px; margin-bottom: 20px; }
   .header h1 { margin: 0 0 6px 0; font-size: 22px; }
   .sub { color: #a1a1aa; font-size: 13px; }
-  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
-  .kpi { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 16px; }
-  .kpi .lbl { color: #a1a1aa; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .kpi .val { font-size: 24px; font-weight: 700; margin: 6px 0 4px 0; }
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+  .kpi { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 14px; }
+  .kpi .lbl { color: #a1a1aa; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi .val { font-size: 21px; font-weight: 700; margin: 6px 0 4px 0; }
   .kpi .hint { color: #71717a; font-size: 11px; }
   .section { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 18px 22px; margin-bottom: 20px; }
   .section h2 { margin: 0 0 14px 0; font-size: 16px; color: #e4e4e7; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #27272a; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 8px 9px; border-bottom: 1px solid #27272a; }
   th { color: #a1a1aa; font-weight: 600; background: #121215; }
   .right { text-align: right; }
 </style>
@@ -782,36 +882,41 @@ function Export-ClaudeMetricsReport {
 <body>
 <div class="wrap">
   <div class="header">
-    <h1>Claude Code &amp; Desktop — Token Usage &amp; FinOps Report ($($s.Currency))</h1>
-    <div class="sub">Generated by Claude Instance Manager (CIM) on $(Get-Date -Format 'dd/MM/yyyy HH:mm') &nbsp;|&nbsp; FX Source: $($s.FxSource) (Daily Historical Rates Applied)</div>
+    <h1>Claude Code &amp; Desktop — Token FinOps &amp; Engineering Report ($($s.Currency))</h1>
+    <div class="sub">Generated by Claude Instance Manager (CIM) on $(Get-Date -Format 'dd/MM/yyyy HH:mm') &nbsp;|&nbsp; FX Source: $($s.FxSource)</div>
   </div>
   <div class="kpis">
     <div class="kpi">
-      <div class="lbl">Estimated API Value ($($s.Currency))</div>
+      <div class="lbl">Cost ($($s.Currency))</div>
       <div class="val" style="color:#d97757;">$($s.TotalCostFmt)</div>
-      <div class="hint">Without Prompt Cache: $($s.UncachedCostFmt)</div>
+      <div class="hint">Gross: $($s.UncachedCostFmt)</div>
     </div>
     <div class="kpi">
-      <div class="lbl">Prompt Cache Savings</div>
+      <div class="lbl">Cache Savings</div>
       <div class="val" style="color:#10b981;">$($s.CacheSavingsFmt)</div>
-      <div class="hint">Cache Hit Rate: $($s.CacheHitRatePct)</div>
+      <div class="hint">Hit Rate: $($s.CacheHitRatePct)</div>
     </div>
     <div class="kpi">
-      <div class="lbl">Total Tokens Processed</div>
+      <div class="lbl">Tokens</div>
       <div class="val" style="color:#60a5fa;">$($s.TotalTokensFmt)</div>
-      <div class="hint">Out: $($s.OutputTokensFmt) | Cache Read: $($s.CacheReadFmt)</div>
+      <div class="hint">Out: $($s.OutputTokensFmt) | Cache: $($s.CacheReadFmt)</div>
     </div>
     <div class="kpi">
-      <div class="lbl">API Requests / Turns</div>
+      <div class="lbl">Code Changes</div>
+      <div class="val" style="color:#34d399;">$($s.LinesAddedFmt) / $($s.LinesRemovedFmt)</div>
+      <div class="hint">Edits: $($s.EditCountFmt) | Bash: $($s.BashCountFmt)</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">Turns &amp; Tools</div>
       <div class="val" style="color:#f4f4f5;">$($s.TotalMessagesFmt)</div>
-      <div class="hint">Subagent Turns: $($s.SubagentMessagesFmt)</div>
+      <div class="hint">Tools: $($s.TotalToolCallsFmt) | Subagents: $($s.SubagentMessagesFmt)</div>
     </div>
   </div>
 "@)
 
-    [void]$sb.AppendLine("<div class='section'><h2>Usage and Cost by Project</h2><table><thead><tr><th>Project</th><th>Instance</th><th class='right'>Turns</th><th class='right'>Input / Cache Write</th><th class='right'>Cache Read</th><th class='right'>Output</th><th class='right'>Total Tokens</th><th class='right'>Cost ($($s.Currency))</th><th class='right'>Cache Saved</th><th class='right'>Share</th></tr></thead><tbody>")
+    [void]$sb.AppendLine("<div class='section'><h2>Usage, Code Changes, and Cost by Project</h2><table><thead><tr><th>Project</th><th>Instance</th><th class='right'>Turns</th><th class='right'>+Lines</th><th class='right'>-Lines</th><th class='right'>Edits</th><th class='right'>Tools</th><th class='right'>Total Tokens</th><th class='right'>Cost ($($s.Currency))</th><th class='right'>Cache Saved</th><th class='right'>Share</th></tr></thead><tbody>")
     foreach ($p in $Report.ByProject) {
-        [void]$sb.AppendLine("<tr><td><strong>$([System.Web.HttpUtility]::HtmlEncode($p.ProjectName))</strong></td><td>$([System.Web.HttpUtility]::HtmlEncode($p.InstanceName))</td><td class='right'>$($p.Turns)</td><td class='right'>$($p.InputFmt)</td><td class='right'>$($p.CacheReadFmt)</td><td class='right'>$($p.OutputFmt)</td><td class='right'>$($p.TotalFmt)</td><td class='right'><strong>$($p.CostFmt)</strong></td><td class='right' style='color:#10b981;'>$($p.SavingsFmt)</td><td class='right'>$($p.SharePct)</td></tr>")
+        [void]$sb.AppendLine("<tr><td><strong>$([System.Web.HttpUtility]::HtmlEncode($p.ProjectName))</strong></td><td>$([System.Web.HttpUtility]::HtmlEncode($p.InstanceName))</td><td class='right'>$($p.Turns)</td><td class='right' style='color:#34d399;'>$($p.LinesAddFmt)</td><td class='right' style='color:#f87171;'>$($p.LinesRemFmt)</td><td class='right'>$($p.EditsFmt)</td><td class='right'>$($p.ToolsFmt)</td><td class='right'>$($p.TotalFmt)</td><td class='right'><strong>$($p.CostFmt)</strong></td><td class='right' style='color:#10b981;'>$($p.SavingsFmt)</td><td class='right'>$($p.SharePct)</td></tr>")
     }
     [void]$sb.AppendLine("</tbody></table></div>")
 

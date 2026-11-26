@@ -134,6 +134,16 @@ if (Test-Path $coreMetricsPath) {
     $numPt = Format-LocaleNumber -Value 12345.67 -Decimals 2 -Culture (Get-CultureForLanguage "pt-BR")
     $numEn = Format-LocaleNumber -Value 12345.67 -Decimals 2 -Culture (Get-CultureForLanguage "en-US")
     Assert-True ($numPt -eq "12.345,67" -and $numEn -eq "12,345.67") "Task 5: Locale-aware number formatting matches pt-BR ($numPt) and en-US ($numEn)"
+    Assert-True ($null -ne $rep.Summary.LinesAddedFmt -and $null -ne $rep.ByTool) "Task 5: Code edit telemetry computed ($($rep.Summary.LinesAddedFmt) / $($rep.Summary.LinesRemovedFmt) lines, $($rep.Summary.EditCountFmt) edits, $($rep.Summary.TotalToolCallsFmt) tools)"
+}
+
+# --- Task 5b: Core-AutoUpdater.ps1 ---
+$coreUpdaterPath = Join-Path $SrcDir "Core-AutoUpdater.ps1"
+Assert-True (Test-Path $coreUpdaterPath) "Task 5b: src/Core-AutoUpdater.ps1 exists"
+if (Test-Path $coreUpdaterPath) {
+    . $coreUpdaterPath
+    $ver = Get-CIMCurrentVersion
+    Assert-True ($ver -eq "1.3.0") "Task 5b: Get-CIMCurrentVersion returns 1.3.0"
 }
 
 # --- Task 6: Main WPF GUI XAML Check ---

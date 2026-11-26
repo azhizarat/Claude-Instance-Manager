@@ -2,11 +2,12 @@
 
 Add-Type -AssemblyName System.Drawing
 
+$script:CIMVersion = "1.3.0"
 $script:CIMRootDir = Join-Path $env:LOCALAPPDATA "Claude-Instances"
 $script:CIMStateFile = Join-Path $script:CIMRootDir "cim-state.json"
 $script:CIMIconsDir = Join-Path $script:CIMRootDir "icons"
 $script:CIMBackupsDir = Join-Path $script:CIMRootDir "Backups"
-$script:CIMNativeDllPath = Join-Path $script:CIMRootDir "CIMNative.v9.dll"
+$script:CIMNativeDllPath = Join-Path $script:CIMRootDir "CIMNative.v10.dll"
 $script:ReservedFolderNames = @("icons", "Backups", "Manager", "logs", "temp")
 $script:CachedClaudeExePath = $null
 $script:PidCommandLineCache = @{}
@@ -308,6 +309,13 @@ namespace CIMNative {
         public long ThinkingTokens;
         public long CacheReadTokens;
         public long CacheWriteTokens;
+        public long LinesAdded;
+        public long LinesRemoved;
+        public int EditCount;
+        public int BashCount;
+        public int ReadSearchCount;
+        public int McpCount;
+        public int TotalToolCalls;
     }
 
     internal class CachedJsonlFile {
@@ -345,6 +353,8 @@ namespace CIMNative {
         private static readonly Regex RxTimestamp = new Regex("\"timestamp\"\\s*:\\s*\"([^\"]+)\"", RegexOptions.Compiled);
         private static readonly Regex RxModel = new Regex("\"model\"\\s*:\\s*\"([^\"]+)\"", RegexOptions.Compiled);
         private static readonly Regex RxCwd = new Regex("\"cwd\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"", RegexOptions.Compiled);
+        private static readonly Regex RxToolId = new Regex("\"id\"\\s*:\\s*\"(toolu_[^\"]+)\"", RegexOptions.Compiled);
+        private static readonly Regex RxToolName = new Regex("\"name\"\\s*:\\s*\"([^\"]+)\"", RegexOptions.Compiled);
 
         private static readonly Regex RxInTok = new Regex("\"input_tokens\"\\s*:\\s*(\\d+)", RegexOptions.Compiled);
         private static readonly Regex RxOutTok = new Regex("\"output_tokens\"\\s*:\\s*(\\d+)", RegexOptions.Compiled);
@@ -352,10 +362,42 @@ namespace CIMNative {
         private static readonly Regex RxCacheRead = new Regex("\"cache_read_input_tokens\"\\s*:\\s*(\\d+)", RegexOptions.Compiled);
         private static readonly Regex RxCacheCreate = new Regex("\"cache_creation_input_tokens\"\\s*:\\s*(\\d+)", RegexOptions.Compiled);
 
+        private static int CountJsonStringLines(string text, int startSearch, string fieldPrefix) {
+            int totalLines = 0;
+            int pos = startSearch;
+            while (pos < text.Length) {
+                int idx = text.IndexOf(fieldPrefix, pos, StringComparison.Ordinal);
+                if (idx < 0) break;
+                int valStart = idx + fieldPrefix.Length;
+                int lines = 1;
+                bool hasChars = false;
+                int i = valStart;
+                while (i < text.Length) {
+                    char c = text[i];
+                    if (c == '\\') {
+                        if (i + 1 < text.Length && text[i + 1] == 'n') {
+                            lines++;
+                        }
+                        hasChars = true;
+                        i += 2;
+                        continue;
+                    }
+                    if (c == '"') {
+                        break;
+                    }
+                    hasChars = true;
+                    i++;
+                }
+                if (hasChars) totalLines += lines;
+                pos = i + 1;
+            }
+            return totalLines;
+        }
+
         private static string GetDiskCachePath() {
             string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Claude-Instances");
             if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            return Path.Combine(dir, "cim-metrics-cache.v2.tsv");
+            return Path.Combine(dir, "cim-metrics-cache.v3.tsv");
         }
 
         private static void LoadDiskCacheIfNeeded() {
@@ -382,15 +424,22 @@ namespace CIMNative {
                         }
                     } else if (line.StartsWith("B\t", StringComparison.Ordinal) && currentFile != null) {
                         string[] parts = line.Split('\t');
-                        if (parts.Length >= 13) {
-                            int tCount = 1;
+                        if (parts.Length >= 20) {
+                            int tCount = 1, edC = 0, baC = 0, rsC = 0, mcC = 0, ttC = 0;
                             int.TryParse(parts[1], out tCount);
-                            long inT = 0, outT = 0, thT = 0, crT = 0, cwT = 0;
+                            long inT = 0, outT = 0, thT = 0, crT = 0, cwT = 0, lAdd = 0, lRem = 0;
                             long.TryParse(parts[8], out inT);
                             long.TryParse(parts[9], out outT);
                             long.TryParse(parts[10], out thT);
                             long.TryParse(parts[11], out crT);
                             long.TryParse(parts[12], out cwT);
+                            long.TryParse(parts[13], out lAdd);
+                            long.TryParse(parts[14], out lRem);
+                            int.TryParse(parts[15], out edC);
+                            int.TryParse(parts[16], out baC);
+                            int.TryParse(parts[17], out rsC);
+                            int.TryParse(parts[18], out mcC);
+                            int.TryParse(parts[19], out ttC);
                             currentFile.Records.Add(new TurnUsageRecord {
                                 TurnCount = tCount,
                                 CliSessionId = parts[2],
@@ -403,7 +452,14 @@ namespace CIMNative {
                                 OutputTokens = outT,
                                 ThinkingTokens = thT,
                                 CacheReadTokens = crT,
-                                CacheWriteTokens = cwT
+                                CacheWriteTokens = cwT,
+                                LinesAdded = lAdd,
+                                LinesRemoved = lRem,
+                                EditCount = edC,
+                                BashCount = baC,
+                                ReadSearchCount = rsC,
+                                McpCount = mcC,
+                                TotalToolCalls = ttC
                             });
                         }
                     }
@@ -435,7 +491,14 @@ namespace CIMNative {
                             sw.Write(r.OutputTokens); sw.Write('\t');
                             sw.Write(r.ThinkingTokens); sw.Write('\t');
                             sw.Write(r.CacheReadTokens); sw.Write('\t');
-                            sw.WriteLine(r.CacheWriteTokens);
+                            sw.Write(r.CacheWriteTokens); sw.Write('\t');
+                            sw.Write(r.LinesAdded); sw.Write('\t');
+                            sw.Write(r.LinesRemoved); sw.Write('\t');
+                            sw.Write(r.EditCount); sw.Write('\t');
+                            sw.Write(r.BashCount); sw.Write('\t');
+                            sw.Write(r.ReadSearchCount); sw.Write('\t');
+                            sw.Write(r.McpCount); sw.Write('\t');
+                            sw.WriteLine(r.TotalToolCalls);
                         }
                     }
                 }
@@ -519,6 +582,7 @@ namespace CIMNative {
             }
 
             var byMsgId = new Dictionary<string, TurnUsageRecord>(StringComparer.Ordinal);
+            var seenToolIds = new HashSet<string>(StringComparer.Ordinal);
             string detectedCwd = "";
             int lineNum = 0;
 
@@ -591,6 +655,45 @@ namespace CIMNative {
                     long total = inTok + outTok + cRead + cWrite;
                     if (total <= 0) continue;
 
+                    // Parse tool_use & code line additions/removals on this line
+                    long lineAdd = 0;
+                    long lineRem = 0;
+                    int edCnt = 0;
+                    int baCnt = 0;
+                    int rsCnt = 0;
+                    int mcCnt = 0;
+                    int ttCnt = 0;
+
+                    int toolIdx = line.IndexOf("\"type\":\"tool_use\"", StringComparison.Ordinal);
+                    if (toolIdx >= 0) {
+                        string toolHeader = line.Substring(toolIdx, Math.Min(320, line.Length - toolIdx));
+                        var mToolId = RxToolId.Match(toolHeader);
+                        string toolId = mToolId.Success ? mToolId.Groups[1].Value : ("t_" + lineNum);
+                        if (seenToolIds.Add(toolId)) {
+                            ttCnt = 1;
+                            var mName = RxToolName.Match(toolHeader);
+                            string tName = mName.Success ? mName.Groups[1].Value : "";
+                            if (tName.Equals("Edit", StringComparison.OrdinalIgnoreCase) ||
+                                tName.Equals("MultiEdit", StringComparison.OrdinalIgnoreCase)) {
+                                edCnt = 1;
+                                lineRem = CountJsonStringLines(line, toolIdx, "\"old_string\":\"");
+                                lineAdd = CountJsonStringLines(line, toolIdx, "\"new_string\":\"");
+                            } else if (tName.Equals("Write", StringComparison.OrdinalIgnoreCase)) {
+                                edCnt = 1;
+                                lineAdd = CountJsonStringLines(line, toolIdx, "\"content\":\"");
+                            } else if (tName.Equals("Bash", StringComparison.OrdinalIgnoreCase)) {
+                                baCnt = 1;
+                            } else if (tName.Equals("Read", StringComparison.OrdinalIgnoreCase) ||
+                                       tName.Equals("Grep", StringComparison.OrdinalIgnoreCase) ||
+                                       tName.Equals("Glob", StringComparison.OrdinalIgnoreCase) ||
+                                       tName.Equals("LS", StringComparison.OrdinalIgnoreCase)) {
+                                rsCnt = 1;
+                            } else if (tName.StartsWith("mcp__", StringComparison.OrdinalIgnoreCase)) {
+                                mcCnt = 1;
+                            }
+                        }
+                    }
+
                     TurnUsageRecord existing;
                     if (byMsgId.TryGetValue(msgId, out existing)) {
                         long prevTotal = existing.InputTokens + existing.OutputTokens + existing.CacheReadTokens + existing.CacheWriteTokens;
@@ -602,6 +705,13 @@ namespace CIMNative {
                             existing.CacheWriteTokens = cWrite;
                             if (!string.IsNullOrEmpty(detectedCwd)) existing.Cwd = detectedCwd;
                         }
+                        existing.LinesAdded += lineAdd;
+                        existing.LinesRemoved += lineRem;
+                        existing.EditCount += edCnt;
+                        existing.BashCount += baCnt;
+                        existing.ReadSearchCount += rsCnt;
+                        existing.McpCount += mcCnt;
+                        existing.TotalToolCalls += ttCnt;
                     } else {
                         byMsgId[msgId] = new TurnUsageRecord {
                             MsgId = msgId,
@@ -616,13 +726,19 @@ namespace CIMNative {
                             OutputTokens = outTok,
                             ThinkingTokens = thinkTok,
                             CacheReadTokens = cRead,
-                            CacheWriteTokens = cWrite
+                            CacheWriteTokens = cWrite,
+                            LinesAdded = lineAdd,
+                            LinesRemoved = lineRem,
+                            EditCount = edCnt,
+                            BashCount = baCnt,
+                            ReadSearchCount = rsCnt,
+                            McpCount = mcCnt,
+                            TotalToolCalls = ttCnt
                         };
                     }
                 }
             }
 
-            // Collapse deduplicated turns by DateLocal + Model inside C# so PowerShell receives ~1,500 buckets instead of 200,000 objects
             var buckets = new Dictionary<string, TurnUsageRecord>(StringComparer.Ordinal);
             foreach (var r in byMsgId.Values) {
                 if (string.IsNullOrEmpty(r.Cwd) && !string.IsNullOrEmpty(detectedCwd)) r.Cwd = detectedCwd;
@@ -635,6 +751,13 @@ namespace CIMNative {
                     b.ThinkingTokens += r.ThinkingTokens;
                     b.CacheReadTokens += r.CacheReadTokens;
                     b.CacheWriteTokens += r.CacheWriteTokens;
+                    b.LinesAdded += r.LinesAdded;
+                    b.LinesRemoved += r.LinesRemoved;
+                    b.EditCount += r.EditCount;
+                    b.BashCount += r.BashCount;
+                    b.ReadSearchCount += r.ReadSearchCount;
+                    b.McpCount += r.McpCount;
+                    b.TotalToolCalls += r.TotalToolCalls;
                 } else {
                     r.TurnCount = 1;
                     buckets[bKey] = r;

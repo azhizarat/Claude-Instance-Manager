@@ -15,11 +15,13 @@ $SrcDir = Join-Path $PSScriptRoot "src"
 . (Join-Path $SrcDir "Core-Metrics.ps1")
 . (Join-Path $SrcDir "Core-ProtocolRouter.ps1")
 . (Join-Path $SrcDir "Core-SettingsBackup.ps1")
+. (Join-Path $SrcDir "Core-AutoUpdater.ps1")
 
 $script:I18N = @{
     "pt-BR" = @{
-        Subtitle              = "v1.2.1"
+        Subtitle              = "v1.3.0"
         BtnRefreshAll         = "Atualizar"
+        BtnCheckCimUpdate     = "Verificar Atualização do CIM"
         TabInstances          = "Instâncias"
         TabSessions           = "Sessões"
         TabMetrics            = "Métricas"
@@ -93,12 +95,14 @@ $script:I18N = @{
         KpiCostTitle          = "CUSTO"
         KpiSavingsTitle       = "ECONOMIA (CACHE)"
         KpiTokensTitle        = "TOKENS"
-        KpiTurnsTitle         = "TURNOS"
+        KpiCodeTitle          = "CÓDIGO (+ / - LINHAS)"
+        KpiTurnsTitle         = "TURNOS & TOOLS"
         SubTabByProject       = "Por Projeto"
         SubTabByModel         = "Por Modelo"
         SubTabByDay           = "Por Dia"
         SubTabByInstance      = "Por Instância"
         SubTabBySession       = "Top Sessões"
+        SubTabByTool          = "Ferramentas e Código"
         # Tab 4 & 5
         LblProtoTitle         = "Protocolo claude://"
         LblProtoBehavior      = "Modo:"
@@ -139,8 +143,9 @@ $script:I18N = @{
         MsgReady              = "Pronto."
     }
     "en-US" = @{
-        Subtitle              = "v1.2.1"
+        Subtitle              = "v1.3.0"
         BtnRefreshAll         = "Refresh"
+        BtnCheckCimUpdate     = "Check CIM Update"
         TabInstances          = "Instances"
         TabSessions           = "Sessions"
         TabMetrics            = "Metrics"
@@ -214,12 +219,14 @@ $script:I18N = @{
         KpiCostTitle          = "COST"
         KpiSavingsTitle       = "CACHE SAVINGS"
         KpiTokensTitle        = "TOKENS"
-        KpiTurnsTitle         = "TURNS"
+        KpiCodeTitle          = "CODE (+ / - LINES)"
+        KpiTurnsTitle         = "TURNS & TOOLS"
         SubTabByProject       = "By Project"
         SubTabByModel         = "By Model"
         SubTabByDay           = "By Day"
         SubTabByInstance      = "By Instance"
         SubTabBySession       = "Top Sessions"
+        SubTabByTool          = "Tools & Code"
         # Tab 4 & 5
         LblProtoTitle         = "claude:// Protocol"
         LblProtoBehavior      = "Mode:"
@@ -398,6 +405,7 @@ function T([string]$Key) {
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                    <Button x:Name="BtnHeaderSelfUpdate" Content="Update Available" Visibility="Collapsed" Background="#059669" BorderBrush="#10B981" Foreground="White" Padding="10,5" Margin="0,0,8,0"/>
                     <ComboBox x:Name="CmbLanguage" Width="120" Height="28" Margin="0,0,8,0" VerticalContentAlignment="Center">
                         <ComboBoxItem Content="Português (BR)" Tag="pt-BR"/>
                         <ComboBoxItem Content="English (US)" Tag="en-US"/>
@@ -606,36 +614,45 @@ function T([string]$Key) {
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" Background="#18181B" BorderBrush="#D97757" BorderThickness="3,1,1,1" CornerRadius="10" Padding="14,10" Margin="0,0,10,0">
+                        <Border Grid.Column="0" Background="#18181B" BorderBrush="#D97757" BorderThickness="3,1,1,1" CornerRadius="10" Padding="12,10" Margin="0,0,8,0">
                             <StackPanel>
                                 <TextBlock x:Name="LblKpiCost" Text="COST" Foreground="#A1A1AA" FontSize="11" FontWeight="Bold"/>
-                                <TextBlock x:Name="TxtKpiCostVal" Text="$0.00" Foreground="#D97757" FontSize="22" FontWeight="Bold" Margin="0,4,0,2"/>
+                                <TextBlock x:Name="TxtKpiCostVal" Text="$0.00" Foreground="#D97757" FontSize="20" FontWeight="Bold" Margin="0,4,0,2"/>
                                 <TextBlock x:Name="TxtKpiCostSub" Text="—" Foreground="#71717A" FontSize="11"/>
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Column="1" Background="#18181B" BorderBrush="#10B981" BorderThickness="3,1,1,1" CornerRadius="10" Padding="14,10" Margin="0,0,10,0">
+                        <Border Grid.Column="1" Background="#18181B" BorderBrush="#10B981" BorderThickness="3,1,1,1" CornerRadius="10" Padding="12,10" Margin="0,0,8,0">
                             <StackPanel>
                                 <TextBlock x:Name="LblKpiSavings" Text="CACHE SAVINGS" Foreground="#A1A1AA" FontSize="11" FontWeight="Bold"/>
-                                <TextBlock x:Name="TxtKpiSavingsVal" Text="$0.00" Foreground="#10B981" FontSize="22" FontWeight="Bold" Margin="0,4,0,2"/>
+                                <TextBlock x:Name="TxtKpiSavingsVal" Text="$0.00" Foreground="#10B981" FontSize="20" FontWeight="Bold" Margin="0,4,0,2"/>
                                 <TextBlock x:Name="TxtKpiSavingsSub" Text="—" Foreground="#71717A" FontSize="11"/>
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Column="2" Background="#18181B" BorderBrush="#2563EB" BorderThickness="3,1,1,1" CornerRadius="10" Padding="14,10" Margin="0,0,10,0">
+                        <Border Grid.Column="2" Background="#18181B" BorderBrush="#2563EB" BorderThickness="3,1,1,1" CornerRadius="10" Padding="12,10" Margin="0,0,8,0">
                             <StackPanel>
                                 <TextBlock x:Name="LblKpiTokens" Text="TOKENS" Foreground="#A1A1AA" FontSize="11" FontWeight="Bold"/>
-                                <TextBlock x:Name="TxtKpiTokensVal" Text="0" Foreground="#60A5FA" FontSize="22" FontWeight="Bold" Margin="0,4,0,2"/>
+                                <TextBlock x:Name="TxtKpiTokensVal" Text="0" Foreground="#60A5FA" FontSize="20" FontWeight="Bold" Margin="0,4,0,2"/>
                                 <TextBlock x:Name="TxtKpiTokensSub" Text="—" Foreground="#71717A" FontSize="11"/>
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Column="3" Background="#18181B" BorderBrush="#7C3AED" BorderThickness="3,1,1,1" CornerRadius="10" Padding="14,10">
+                        <Border Grid.Column="3" Background="#18181B" BorderBrush="#059669" BorderThickness="3,1,1,1" CornerRadius="10" Padding="12,10" Margin="0,0,8,0">
                             <StackPanel>
-                                <TextBlock x:Name="LblKpiTurns" Text="TURNS" Foreground="#A1A1AA" FontSize="11" FontWeight="Bold"/>
-                                <TextBlock x:Name="TxtKpiTurnsVal" Text="0" Foreground="#F4F4F5" FontSize="22" FontWeight="Bold" Margin="0,4,0,2"/>
+                                <TextBlock x:Name="LblKpiCode" Text="CODE (+ / - LINES)" Foreground="#A1A1AA" FontSize="11" FontWeight="Bold"/>
+                                <TextBlock x:Name="TxtKpiCodeVal" Text="+0 / -0" Foreground="#34D399" FontSize="19" FontWeight="Bold" Margin="0,4,0,2"/>
+                                <TextBlock x:Name="TxtKpiCodeSub" Text="—" Foreground="#71717A" FontSize="11"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="4" Background="#18181B" BorderBrush="#7C3AED" BorderThickness="3,1,1,1" CornerRadius="10" Padding="12,10">
+                            <StackPanel>
+                                <TextBlock x:Name="LblKpiTurns" Text="TURNS &amp; TOOLS" Foreground="#A1A1AA" FontSize="11" FontWeight="Bold"/>
+                                <TextBlock x:Name="TxtKpiTurnsVal" Text="0" Foreground="#F4F4F5" FontSize="20" FontWeight="Bold" Margin="0,4,0,2"/>
                                 <TextBlock x:Name="TxtKpiTurnsSub" Text="—" Foreground="#71717A" FontSize="11"/>
                             </StackPanel>
                         </Border>
@@ -657,6 +674,9 @@ function T([string]$Key) {
                         </TabItem>
                         <TabItem x:Name="SubTabBySession" Header="Top Sessions">
                             <DataGrid x:Name="DgMetricsSessions" />
+                        </TabItem>
+                        <TabItem x:Name="SubTabByTool" Header="Tools &amp; Code">
+                            <DataGrid x:Name="DgMetricsTools" />
                         </TabItem>
                     </TabControl>
                 </Grid>
@@ -751,7 +771,9 @@ function T([string]$Key) {
                             <RadioButton x:Name="RbUpdateDisabled" Content=""/>
                             <RadioButton x:Name="RbUpdateDefault" Content=""/>
 
-                            <Button x:Name="BtnApplyUpdatePolicy" Content="" Background="#D97757" BorderBrush="#D97757" Foreground="White" Padding="12,8" Margin="0,14,0,0"/>
+                            <Button x:Name="BtnApplyUpdatePolicy" Content="" Background="#D97757" BorderBrush="#D97757" Foreground="White" Padding="12,8" Margin="0,14,0,14"/>
+                            <Separator Background="#27272A" Margin="0,4,0,14"/>
+                            <Button x:Name="BtnCheckCimUpdate" Content="Check CIM Update" Background="#2563EB" BorderBrush="#2563EB" Foreground="White" Padding="12,8"/>
                         </StackPanel>
                     </Border>
 
@@ -801,6 +823,8 @@ $TxtStatusBar          = $Window.FindName("TxtStatusBar")
 $BadgeProtoHeader      = $Window.FindName("BadgeProtoHeader")
 $TxtProtoHeader        = $Window.FindName("TxtProtoHeader")
 $BtnRefreshAll         = $Window.FindName("BtnRefreshAll")
+$BtnHeaderSelfUpdate   = $Window.FindName("BtnHeaderSelfUpdate")
+$BtnCheckCimUpdate     = $Window.FindName("BtnCheckCimUpdate")
 $CmbLanguage           = $Window.FindName("CmbLanguage")
 
 # Tab 1
@@ -858,6 +882,8 @@ $TxtKpiSavingsVal      = $Window.FindName("TxtKpiSavingsVal")
 $TxtKpiSavingsSub      = $Window.FindName("TxtKpiSavingsSub")
 $TxtKpiTokensVal       = $Window.FindName("TxtKpiTokensVal")
 $TxtKpiTokensSub       = $Window.FindName("TxtKpiTokensSub")
+$TxtKpiCodeVal         = $Window.FindName("TxtKpiCodeVal")
+$TxtKpiCodeSub         = $Window.FindName("TxtKpiCodeSub")
 $TxtKpiTurnsVal        = $Window.FindName("TxtKpiTurnsVal")
 $TxtKpiTurnsSub        = $Window.FindName("TxtKpiTurnsSub")
 $DgMetricsProjects     = $Window.FindName("DgMetricsProjects")
@@ -865,6 +891,7 @@ $DgMetricsModels       = $Window.FindName("DgMetricsModels")
 $DgMetricsDays         = $Window.FindName("DgMetricsDays")
 $DgMetricsInstances    = $Window.FindName("DgMetricsInstances")
 $DgMetricsSessions     = $Window.FindName("DgMetricsSessions")
+$DgMetricsTools        = $Window.FindName("DgMetricsTools")
 
 # Tab 4
 $TxtProtoDetailStatus  = $Window.FindName("TxtProtoDetailStatus")
@@ -972,12 +999,15 @@ function Apply-Localization {
     $Window.FindName("LblKpiCost").Text           = T "KpiCostTitle"
     $Window.FindName("LblKpiSavings").Text        = T "KpiSavingsTitle"
     $Window.FindName("LblKpiTokens").Text         = T "KpiTokensTitle"
+    $Window.FindName("LblKpiCode").Text           = T "KpiCodeTitle"
     $Window.FindName("LblKpiTurns").Text          = T "KpiTurnsTitle"
     $Window.FindName("SubTabByProject").Header    = T "SubTabByProject"
     $Window.FindName("SubTabByModel").Header      = T "SubTabByModel"
     $Window.FindName("SubTabByDay").Header        = T "SubTabByDay"
     $Window.FindName("SubTabByInstance").Header   = T "SubTabByInstance"
     $Window.FindName("SubTabBySession").Header    = T "SubTabBySession"
+    $Window.FindName("SubTabByTool").Header       = T "SubTabByTool"
+    $BtnCheckCimUpdate.Content                    = T "BtnCheckCimUpdate"
     # Tab 4 & 5
     $Window.FindName("LblProtoTitle").Text        = T "LblProtoTitle"
     $Window.FindName("LblProtoBehavior").Text     = T "LblProtoBehavior"
@@ -1098,16 +1128,19 @@ function Refresh-MetricsUI([switch]$ForceRefresh) {
     $TxtKpiSavingsSub.Text = "Hit: $($s.CacheHitRatePct)"
     $TxtKpiTokensVal.Text  = $s.TotalTokensFmt
     $TxtKpiTokensSub.Text  = "Out: $($s.OutputTokensFmt) | Cache: $($s.CacheReadFmt)"
+    $TxtKpiCodeVal.Text    = "$($s.LinesAddedFmt) / $($s.LinesRemovedFmt)"
+    $TxtKpiCodeSub.Text    = "Edits: $($s.EditCountFmt) | Bash: $($s.BashCountFmt)"
     $TxtKpiTurnsVal.Text   = "$($s.TotalMessagesFmt)"
-    $TxtKpiTurnsSub.Text   = "Subagents: $($s.SubagentMessagesFmt)"
+    $TxtKpiTurnsSub.Text   = "Tools: $($s.TotalToolCallsFmt) | Subagents: $($s.SubagentMessagesFmt)"
 
     $DgMetricsProjects.ItemsSource  = $rep.ByProject
     $DgMetricsModels.ItemsSource    = $rep.ByModel
     $DgMetricsDays.ItemsSource      = $rep.ByDay
     $DgMetricsInstances.ItemsSource = $rep.ByInstance
     $DgMetricsSessions.ItemsSource  = $rep.BySession
+    $DgMetricsTools.ItemsSource     = $rep.ByTool
 
-    Set-Status "$($s.TotalMessagesFmt) turns | $($s.TotalTokensFmt) tokens | $($s.TotalCostFmt)"
+    Set-Status "$($s.TotalMessagesFmt) turns | $($s.LinesAddedFmt)/$($s.LinesRemovedFmt) lines | $($s.TotalTokensFmt) tokens | $($s.TotalCostFmt)"
 }
 
 function Invoke-MetricsRefreshDeferred([switch]$ForceRefresh) {
@@ -1878,6 +1911,48 @@ $BtnOpenBackupsFolder.Add_Click({
     }
 })
 
+$script:PendingCimUpdate = $null
+
+function Invoke-CimUpdateCheck([bool]$Interactive) {
+    $u = Test-CIMUpdateAvailable
+    $script:PendingCimUpdate = $u
+    if ($u.IsUpdateAvailable) {
+        $BtnHeaderSelfUpdate.Content = if ($script:CurrentLang -eq "pt-BR") { "Atualizar (v$($u.LatestVersion))" } else { "Update (v$($u.LatestVersion))" }
+        $BtnHeaderSelfUpdate.Visibility = "Visible"
+        if ($Interactive) {
+            $msg = if ($script:CurrentLang -eq "pt-BR") {
+                "Nova versão disponível no GitHub: v$($u.LatestVersion) (Atual: v$($u.CurrentVersion)).`n`nDeseja baixar e atualizar agora?"
+            } else {
+                "New version available on GitHub: v$($u.LatestVersion) (Current: v$($u.CurrentVersion)).`n`nDownload and install now?"
+            }
+            $ans = [System.Windows.MessageBox]::Show($msg, "CIM Update", [System.Windows.MessageBoxButton]::YesNo, [System.Windows.MessageBoxImage]::Information)
+            if ($ans -eq [System.Windows.MessageBoxResult]::Yes) {
+                Set-Status "Downloading CIM v$($u.LatestVersion)..."
+                Install-CIMSelfUpdate -UpdateInfo $u -AppRootDir $PSScriptRoot | Out-Null
+                $Window.Close()
+            }
+        } else {
+            Set-Status "CIM v$($u.LatestVersion) available."
+        }
+    } else {
+        $BtnHeaderSelfUpdate.Visibility = "Collapsed"
+        if ($Interactive) {
+            $msg = if ($script:CurrentLang -eq "pt-BR") { "O CIM já está na versão mais recente (v$($u.CurrentVersion))." } else { "CIM is up to date (v$($u.CurrentVersion))." }
+            [System.Windows.MessageBox]::Show($msg, "CIM Update", "OK", "Information") | Out-Null
+        }
+    }
+}
+
+$BtnHeaderSelfUpdate.Add_Click({
+    if ($script:PendingCimUpdate -and $script:PendingCimUpdate.IsUpdateAvailable) {
+        Invoke-CimUpdateCheck -Interactive $true
+    }
+})
+
+$BtnCheckCimUpdate.Add_Click({
+    Invoke-CimUpdateCheck -Interactive $true
+})
+
 Apply-Localization
 
 $Window.Add_ContentRendered({
@@ -1887,6 +1962,10 @@ $Window.Add_ContentRendered({
     Refresh-UpdateAndBackupUI
     Start-MetricsBackgroundPrewarm
     Set-Status (T "MsgReady")
+    [void]$Window.Dispatcher.BeginInvoke(
+        [System.Windows.Threading.DispatcherPriority]::ApplicationIdle,
+        [Action]{ Invoke-CimUpdateCheck -Interactive $false }
+    )
 })
 
 [void]$Window.ShowDialog()
