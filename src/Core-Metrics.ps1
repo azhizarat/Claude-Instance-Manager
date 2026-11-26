@@ -834,7 +834,7 @@ function Get-ClaudeMetricsReport {
             LinesAddedFmt      = "+" + (Format-LocaleNumber -Value $totalLinesAdd -Decimals 0 -Culture $culture)
             LinesRemoved       = $totalLinesRem
             LinesRemovedFmt    = "-" + (Format-LocaleNumber -Value $totalLinesRem -Decimals 0 -Culture $culture)
-            NetLinesFmt        = (if ($netLines -ge 0) { "+" } else { "" }) + (Format-LocaleNumber -Value $netLines -Decimals 0 -Culture $culture)
+            NetLinesFmt        = $(if ($netLines -ge 0) { "+" } else { "" }) + (Format-LocaleNumber -Value $netLines -Decimals 0 -Culture $culture)
             EditCount          = $totalEdits
             EditCountFmt       = Format-LocaleNumber -Value $totalEdits -Decimals 0 -Culture $culture
             BashCount          = $totalBash
