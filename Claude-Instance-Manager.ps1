@@ -19,7 +19,7 @@ $SrcDir = Join-Path $PSScriptRoot "src"
 
 $script:I18N = @{
     "pt-BR" = @{
-        Subtitle              = "v1.3.0"
+        Subtitle              = "v1.4.0"
         BtnRefreshAll         = "Atualizar"
         BtnCheckCimUpdate     = "Verificar Atualização do CIM"
         TabInstances          = "Instâncias"
@@ -97,12 +97,20 @@ $script:I18N = @{
         KpiTokensTitle        = "TOKENS"
         KpiCodeTitle          = "CÓDIGO (+ / - LINHAS)"
         KpiTurnsTitle         = "TURNOS & TOOLS"
+        SubTabCharts          = "Gráficos e Insights"
         SubTabByProject       = "Por Projeto"
         SubTabByModel         = "Por Modelo"
         SubTabByDay           = "Por Dia"
         SubTabByInstance      = "Por Instância"
         SubTabBySession       = "Top Sessões"
         SubTabByTool          = "Ferramentas e Código"
+        ChartDailyTitle       = "Evolução Diária: Custo (Terracota) vs. Economia Cache (Verde)"
+        ChartProjTitle        = "Top Projetos por Custo"
+        ChartModelCodeTitle   = "Distribuição por Modelo e Volume de Código"
+        InsightEffTitle       = "EFICIÊNCIA DE CUSTO"
+        InsightPeakTitle      = "DIA DE PICO"
+        InsightTopTitle       = "PROJETO & MODELO LÍDER"
+        InsightProfileTitle   = "PERFIL DE AÇÃO (READ / EDIT / BASH / MCP)"
         # Tab 4 & 5
         LblProtoTitle         = "Protocolo claude://"
         LblProtoBehavior      = "Modo:"
@@ -143,7 +151,7 @@ $script:I18N = @{
         MsgReady              = "Pronto."
     }
     "en-US" = @{
-        Subtitle              = "v1.3.0"
+        Subtitle              = "v1.4.0"
         BtnRefreshAll         = "Refresh"
         BtnCheckCimUpdate     = "Check CIM Update"
         TabInstances          = "Instances"
@@ -221,12 +229,20 @@ $script:I18N = @{
         KpiTokensTitle        = "TOKENS"
         KpiCodeTitle          = "CODE (+ / - LINES)"
         KpiTurnsTitle         = "TURNS & TOOLS"
+        SubTabCharts          = "Charts & Insights"
         SubTabByProject       = "By Project"
         SubTabByModel         = "By Model"
         SubTabByDay           = "By Day"
         SubTabByInstance      = "By Instance"
         SubTabBySession       = "Top Sessions"
         SubTabByTool          = "Tools & Code"
+        ChartDailyTitle       = "Daily Timeline: Cost (Terracotta) vs. Cache Savings (Green)"
+        ChartProjTitle        = "Top Projects by Cost"
+        ChartModelCodeTitle   = "Model Distribution & Code Volume"
+        InsightEffTitle       = "COST EFFICIENCY"
+        InsightPeakTitle      = "PEAK DAY"
+        InsightTopTitle       = "TOP PROJECT & MODEL"
+        InsightProfileTitle   = "ACTION PROFILE (READ / EDIT / BASH / MCP)"
         # Tab 4 & 5
         LblProtoTitle         = "claude:// Protocol"
         LblProtoBehavior      = "Mode:"
@@ -660,6 +676,85 @@ function T([string]$Key) {
 
                     <!-- Breakdown Sub-Tabs -->
                     <TabControl Grid.Row="2" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" Padding="8">
+                        <TabItem x:Name="SubTabCharts" Header="Charts &amp; Insights">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="4">
+                                    <!-- Row A: 4 Analytical Insight Cards -->
+                                    <Grid Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="1.25*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border Grid.Column="0" Background="#121215" BorderBrush="#27272A" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,8,0">
+                                            <StackPanel>
+                                                <TextBlock x:Name="LblInsightEff" Text="COST EFFICIENCY" Foreground="#A1A1AA" FontSize="10" FontWeight="Bold"/>
+                                                <TextBlock x:Name="TxtInsightEffVal" Text="—" Foreground="#F4F4F5" FontSize="15" FontWeight="Bold" Margin="0,4,0,2"/>
+                                                <TextBlock x:Name="TxtInsightEffSub" Text="—" Foreground="#71717A" FontSize="11"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border Grid.Column="1" Background="#121215" BorderBrush="#27272A" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,8,0">
+                                            <StackPanel>
+                                                <TextBlock x:Name="LblInsightPeak" Text="PEAK DAY" Foreground="#A1A1AA" FontSize="10" FontWeight="Bold"/>
+                                                <TextBlock x:Name="TxtInsightPeakVal" Text="—" Foreground="#F59E0B" FontSize="14" FontWeight="Bold" Margin="0,4,0,2"/>
+                                                <TextBlock x:Name="TxtInsightPeakSub" Text="—" Foreground="#71717A" FontSize="11"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border Grid.Column="2" Background="#121215" BorderBrush="#27272A" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,8,0">
+                                            <StackPanel>
+                                                <TextBlock x:Name="LblInsightTop" Text="TOP PROJECT &amp; MODEL" Foreground="#A1A1AA" FontSize="10" FontWeight="Bold"/>
+                                                <TextBlock x:Name="TxtInsightTopVal" Text="—" Foreground="#60A5FA" FontSize="13" FontWeight="Bold" Margin="0,4,0,2" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock x:Name="TxtInsightTopSub" Text="—" Foreground="#71717A" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border Grid.Column="3" Background="#121215" BorderBrush="#27272A" BorderThickness="1" CornerRadius="8" Padding="12,8">
+                                            <StackPanel>
+                                                <TextBlock x:Name="LblInsightProfile" Text="ACTION PROFILE" Foreground="#A1A1AA" FontSize="10" FontWeight="Bold"/>
+                                                <Grid x:Name="GridActionProfileBar" Height="12" Margin="0,6,0,4" Background="#27272A"/>
+                                                <TextBlock x:Name="TxtInsightProfileSub" Text="—" Foreground="#71717A" FontSize="10"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+
+                                    <!-- Row B: Daily Timeline Dual-Bar Vector Chart -->
+                                    <Border Background="#121215" BorderBrush="#27272A" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,12">
+                                        <StackPanel>
+                                            <TextBlock x:Name="LblChartDaily" Text="Daily Timeline" Foreground="#E4E4E7" FontSize="13" FontWeight="Bold" Margin="0,0,0,8"/>
+                                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                                <StackPanel x:Name="PanelDailyChart" Orientation="Horizontal" Height="155" VerticalAlignment="Bottom"/>
+                                            </ScrollViewer>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Row C: 2-Column Horizontal Bar Charts (Projects & Models/Code) -->
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="1.15*"/>
+                                            <ColumnDefinition Width="1*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border Grid.Column="0" Background="#121215" BorderBrush="#27272A" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,8,0">
+                                            <StackPanel>
+                                                <TextBlock x:Name="LblChartProj" Text="Top Projects by Cost" Foreground="#E4E4E7" FontSize="13" FontWeight="Bold" Margin="0,0,0,8"/>
+                                                <StackPanel x:Name="PanelProjectBars"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border Grid.Column="1" Background="#121215" BorderBrush="#27272A" BorderThickness="1" CornerRadius="8" Padding="14,10">
+                                            <StackPanel>
+                                                <TextBlock x:Name="LblChartModelCode" Text="Model Distribution &amp; Code Volume" Foreground="#E4E4E7" FontSize="13" FontWeight="Bold" Margin="0,0,0,8"/>
+                                                <StackPanel x:Name="PanelModelCodeBars"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
                         <TabItem x:Name="SubTabByProject" Header="By Project">
                             <DataGrid x:Name="DgMetricsProjects" />
                         </TabItem>
@@ -892,6 +987,17 @@ $DgMetricsDays         = $Window.FindName("DgMetricsDays")
 $DgMetricsInstances    = $Window.FindName("DgMetricsInstances")
 $DgMetricsSessions     = $Window.FindName("DgMetricsSessions")
 $DgMetricsTools        = $Window.FindName("DgMetricsTools")
+$PanelDailyChart       = $Window.FindName("PanelDailyChart")
+$PanelProjectBars      = $Window.FindName("PanelProjectBars")
+$PanelModelCodeBars    = $Window.FindName("PanelModelCodeBars")
+$GridActionProfileBar  = $Window.FindName("GridActionProfileBar")
+$TxtInsightEffVal      = $Window.FindName("TxtInsightEffVal")
+$TxtInsightEffSub      = $Window.FindName("TxtInsightEffSub")
+$TxtInsightPeakVal     = $Window.FindName("TxtInsightPeakVal")
+$TxtInsightPeakSub     = $Window.FindName("TxtInsightPeakSub")
+$TxtInsightTopVal      = $Window.FindName("TxtInsightTopVal")
+$TxtInsightTopSub      = $Window.FindName("TxtInsightTopSub")
+$TxtInsightProfileSub  = $Window.FindName("TxtInsightProfileSub")
 
 # Tab 4
 $TxtProtoDetailStatus  = $Window.FindName("TxtProtoDetailStatus")
@@ -1001,12 +1107,20 @@ function Apply-Localization {
     $Window.FindName("LblKpiTokens").Text         = T "KpiTokensTitle"
     $Window.FindName("LblKpiCode").Text           = T "KpiCodeTitle"
     $Window.FindName("LblKpiTurns").Text          = T "KpiTurnsTitle"
+    $Window.FindName("SubTabCharts").Header       = T "SubTabCharts"
     $Window.FindName("SubTabByProject").Header    = T "SubTabByProject"
     $Window.FindName("SubTabByModel").Header      = T "SubTabByModel"
     $Window.FindName("SubTabByDay").Header        = T "SubTabByDay"
     $Window.FindName("SubTabByInstance").Header   = T "SubTabByInstance"
     $Window.FindName("SubTabBySession").Header    = T "SubTabBySession"
     $Window.FindName("SubTabByTool").Header       = T "SubTabByTool"
+    $Window.FindName("LblChartDaily").Text        = T "ChartDailyTitle"
+    $Window.FindName("LblChartProj").Text         = T "ChartProjTitle"
+    $Window.FindName("LblChartModelCode").Text    = T "ChartModelCodeTitle"
+    $Window.FindName("LblInsightEff").Text        = T "InsightEffTitle"
+    $Window.FindName("LblInsightPeak").Text       = T "InsightPeakTitle"
+    $Window.FindName("LblInsightTop").Text        = T "InsightTopTitle"
+    $Window.FindName("LblInsightProfile").Text    = T "InsightProfileTitle"
     $BtnCheckCimUpdate.Content                    = T "BtnCheckCimUpdate"
     # Tab 4 & 5
     $Window.FindName("LblProtoTitle").Text        = T "LblProtoTitle"
@@ -1086,6 +1200,186 @@ function Initialize-MetricsFilterCombos([switch]$ForceRefresh) {
     $CmbMetricsModel.SelectedIndex = 0
 }
 
+function Render-WpfMetricsCharts($Report) {
+    $s = $Report.Summary
+
+    # 1. Populate 4 Analytical Insight Cards
+    $TxtInsightEffVal.Text = "$($s.AvgCostPerTurnFmt) / turn"
+    $TxtInsightEffSub.Text = "1K LOC: $($s.CostPer1kLocFmt) | Avg: $($s.AvgTokensPerTurnFmt)/turn"
+    $TxtInsightPeakVal.Text = $s.PeakDayLabel
+    $TxtInsightPeakSub.Text = "Cache Discount: $($s.CacheDiscountPct)"
+    $TxtInsightTopVal.Text  = $s.TopProjectLabel
+    $TxtInsightTopSub.Text  = "Model: $($s.TopModelLabel)"
+    $TxtInsightProfileSub.Text = "Read $($s.ReadPctFmt) | Edit $($s.EditPctFmt) | Bash $($s.BashPctFmt) | MCP $($s.McpOtherPctFmt)"
+
+    $GridActionProfileBar.ColumnDefinitions.Clear()
+    $GridActionProfileBar.Children.Clear()
+    $segColors = @("#3B82F6", "#10B981", "#F59E0B", "#8B5CF6")
+    $segPcts   = @([double]$s.ReadPct, [double]$s.EditPct, [double]$s.BashPct, [double]$s.McpOtherPct)
+    for ($i = 0; $i -lt 4; $i++) {
+        $cd = New-Object System.Windows.Controls.ColumnDefinition
+        $w = [Math]::Max(0.1, $segPcts[$i])
+        $cd.Width = New-Object System.Windows.GridLength($w, [System.Windows.GridUnitType]::Star)
+        [void]$GridActionProfileBar.ColumnDefinitions.Add($cd)
+
+        $rect = New-Object System.Windows.Controls.Border
+        $rect.Background = $BrushConv.ConvertFromString($segColors[$i])
+        [System.Windows.Controls.Grid]::SetColumn($rect, $i)
+        [void]$GridActionProfileBar.Children.Add($rect)
+    }
+
+    # 2. Daily Dual-Bar Vector Chart (up to last 30 active days in chronological order)
+    $PanelDailyChart.Children.Clear()
+    $chronDays = @($Report.ByDay | Select-Object -First 30)
+    [array]::Reverse($chronDays)
+    $maxDay = 0.01
+    foreach ($d in $chronDays) {
+        if ($d.CostRaw -gt $maxDay) { $maxDay = $d.CostRaw }
+        if ($d.SavingsRaw -gt $maxDay) { $maxDay = $d.SavingsRaw }
+    }
+
+    foreach ($d in $chronDays) {
+        $colStack = New-Object System.Windows.Controls.StackPanel
+        $colStack.Width = 34
+        $colStack.Margin = New-Object System.Windows.Thickness(2, 0, 2, 0)
+        $colStack.VerticalAlignment = "Bottom"
+        $colStack.ToolTip = "$($d.Date)`nCost: $($d.CostFmt)`nSaved: $($d.SavingsFmt)`nTokens: $($d.TotalFmt)`nCode: $($d.LinesAddFmt) / $($d.LinesRemFmt)`nFX: $($d.FxRateFmt)"
+
+        $barsPair = New-Object System.Windows.Controls.StackPanel
+        $barsPair.Orientation = "Horizontal"
+        $barsPair.HorizontalAlignment = "Center"
+        $barsPair.VerticalAlignment = "Bottom"
+        $barsPair.Height = 130
+
+        $hCost = [Math]::Max(3.0, [Math]::Round(($d.CostRaw / $maxDay) * 124.0))
+        $hSave = [Math]::Max(3.0, [Math]::Round(($d.SavingsRaw / $maxDay) * 124.0))
+
+        $bCost = New-Object System.Windows.Controls.Border
+        $bCost.Width = 11
+        $bCost.Height = $hCost
+        $bCost.VerticalAlignment = "Bottom"
+        $bCost.CornerRadius = New-Object System.Windows.CornerRadius(2, 2, 0, 0)
+        $bCost.Background = $BrushConv.ConvertFromString("#D97757")
+        $bCost.Margin = New-Object System.Windows.Thickness(0, 0, 2, 0)
+
+        $bSave = New-Object System.Windows.Controls.Border
+        $bSave.Width = 11
+        $bSave.Height = $hSave
+        $bSave.VerticalAlignment = "Bottom"
+        $bSave.CornerRadius = New-Object System.Windows.CornerRadius(2, 2, 0, 0)
+        $bSave.Background = $BrushConv.ConvertFromString("#10B981")
+
+        [void]$barsPair.Children.Add($bCost)
+        [void]$barsPair.Children.Add($bSave)
+        [void]$colStack.Children.Add($barsPair)
+
+        $lblDate = New-Object System.Windows.Controls.TextBlock
+        $lblDate.Text = if ($d.Date.Length -ge 10) { $d.Date.Substring(5) } else { $d.Date }
+        $lblDate.FontSize = 9
+        $lblDate.Foreground = $BrushConv.ConvertFromString("#71717A")
+        $lblDate.HorizontalAlignment = "Center"
+        $lblDate.Margin = New-Object System.Windows.Thickness(0, 4, 0, 0)
+        [void]$colStack.Children.Add($lblDate)
+
+        [void]$PanelDailyChart.Children.Add($colStack)
+    }
+
+    # 3. Top Projects Horizontal Bars
+    $PanelProjectBars.Children.Clear()
+    $topProjs = @($Report.ByProject | Select-Object -First 7)
+    $maxProjCost = 0.01
+    foreach ($p in $topProjs) { if ($p.CostRaw -gt $maxProjCost) { $maxProjCost = $p.CostRaw } }
+
+    foreach ($p in $topProjs) {
+        $row = New-Object System.Windows.Controls.StackPanel
+        $row.Margin = New-Object System.Windows.Thickness(0, 0, 0, 8)
+        $row.ToolTip = "$($p.ProjectName) ($($p.InstanceName))`nCost: $($p.CostFmt) ($($p.SharePct))`nCode: $($p.LinesAddFmt) / $($p.LinesRemFmt) ($($p.EditsFmt) edits)"
+
+        $hdr = New-Object System.Windows.Controls.DockPanel
+        $hdr.LastChildFill = $false
+        $tName = New-Object System.Windows.Controls.TextBlock
+        $tName.Text = "$($p.ProjectName)  ($($p.LinesAddFmt) / $($p.LinesRemFmt))"
+        $tName.FontSize = 11
+        $tName.Foreground = $BrushConv.ConvertFromString("#E4E4E7")
+        [System.Windows.Controls.DockPanel]::SetDock($tName, "Left")
+
+        $tVal = New-Object System.Windows.Controls.TextBlock
+        $tVal.Text = "$($p.CostFmt) ($($p.SharePct))"
+        $tVal.FontSize = 11
+        $tVal.FontWeight = "SemiBold"
+        $tVal.Foreground = $BrushConv.ConvertFromString("#D97757")
+        [System.Windows.Controls.DockPanel]::SetDock($tVal, "Right")
+
+        [void]$hdr.Children.Add($tName)
+        [void]$hdr.Children.Add($tVal)
+        [void]$row.Children.Add($hdr)
+
+        $barTrack = New-Object System.Windows.Controls.Border
+        $barTrack.Height = 7
+        $barTrack.CornerRadius = New-Object System.Windows.CornerRadius(3)
+        $barTrack.Background = $BrushConv.ConvertFromString("#27272A")
+        $barTrack.Margin = New-Object System.Windows.Thickness(0, 3, 0, 0)
+
+        $barFill = New-Object System.Windows.Controls.Border
+        $barFill.Height = 7
+        $barFill.CornerRadius = New-Object System.Windows.CornerRadius(3)
+        $barFill.HorizontalAlignment = "Left"
+        $barFill.Width = [Math]::Max(4.0, [Math]::Round(($p.CostRaw / $maxProjCost) * 420.0))
+        $barFill.Background = $BrushConv.ConvertFromString("#3B82F6")
+        $barTrack.Child = $barFill
+        [void]$row.Children.Add($barTrack)
+
+        [void]$PanelProjectBars.Children.Add($row)
+    }
+
+    # 4. Model Distribution & Tool Breakdown Horizontal Bars
+    $PanelModelCodeBars.Children.Clear()
+    $modColors = @("#D97757", "#3B82F6", "#10B981", "#8B5CF6", "#F59E0B", "#EC4899")
+    $mIndex = 0
+    foreach ($m in ($Report.ByModel | Select-Object -First 6)) {
+        $col = $modColors[$mIndex % $modColors.Count]
+        $mIndex++
+        $row = New-Object System.Windows.Controls.StackPanel
+        $row.Margin = New-Object System.Windows.Thickness(0, 0, 0, 8)
+
+        $hdr = New-Object System.Windows.Controls.DockPanel
+        $hdr.LastChildFill = $false
+        $tName = New-Object System.Windows.Controls.TextBlock
+        $tName.Text = "$($m.Model)  [$($m.TotalFmt) tok]"
+        $tName.FontSize = 11
+        $tName.Foreground = $BrushConv.ConvertFromString("#E4E4E7")
+        [System.Windows.Controls.DockPanel]::SetDock($tName, "Left")
+
+        $tVal = New-Object System.Windows.Controls.TextBlock
+        $tVal.Text = "$($m.CostFmt) ($($m.SharePct))"
+        $tVal.FontSize = 11
+        $tVal.FontWeight = "SemiBold"
+        $tVal.Foreground = $BrushConv.ConvertFromString($col)
+        [System.Windows.Controls.DockPanel]::SetDock($tVal, "Right")
+
+        [void]$hdr.Children.Add($tName)
+        [void]$hdr.Children.Add($tVal)
+        [void]$row.Children.Add($hdr)
+
+        $barTrack = New-Object System.Windows.Controls.Border
+        $barTrack.Height = 7
+        $barTrack.CornerRadius = New-Object System.Windows.CornerRadius(3)
+        $barTrack.Background = $BrushConv.ConvertFromString("#27272A")
+        $barTrack.Margin = New-Object System.Windows.Thickness(0, 3, 0, 0)
+
+        $barFill = New-Object System.Windows.Controls.Border
+        $barFill.Height = 7
+        $barFill.CornerRadius = New-Object System.Windows.CornerRadius(3)
+        $barFill.HorizontalAlignment = "Left"
+        $barFill.Width = [Math]::Max(4.0, [Math]::Round(([double]$m.ShareVal / 100.0) * 360.0))
+        $barFill.Background = $BrushConv.ConvertFromString($col)
+        $barTrack.Child = $barFill
+        [void]$row.Children.Add($barTrack)
+
+        [void]$PanelModelCodeBars.Children.Add($row)
+    }
+}
+
 function Refresh-MetricsUI([switch]$ForceRefresh) {
     $script:SuppressMetricsEvents = $true
     try {
@@ -1139,6 +1433,7 @@ function Refresh-MetricsUI([switch]$ForceRefresh) {
     $DgMetricsInstances.ItemsSource = $rep.ByInstance
     $DgMetricsSessions.ItemsSource  = $rep.BySession
     $DgMetricsTools.ItemsSource     = $rep.ByTool
+    Render-WpfMetricsCharts -Report $rep
 
     Set-Status "$($s.TotalMessagesFmt) turns | $($s.LinesAddedFmt)/$($s.LinesRemovedFmt) lines | $($s.TotalTokensFmt) tokens | $($s.TotalCostFmt)"
 }

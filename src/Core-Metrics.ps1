@@ -685,7 +685,11 @@ function Get-ClaudeMetricsReport {
             TotalTokens  = $_.TotalTokens
             CostRaw      = [math]::Round($_.Cost, 2)
             CostFmt      = Format-CurrencyValue -Amount $_.Cost -CurrencyCode $Currency -Culture $culture
+            SavingsRaw   = [math]::Round($_.Savings, 2)
             SavingsFmt   = Format-CurrencyValue -Amount $_.Savings -CurrencyCode $Currency -Culture $culture
+            LinesAdded   = $_.LinesAdded
+            LinesRemoved = $_.LinesRemoved
+            ShareVal     = [math]::Round($shareVal, 1)
             SharePct     = ($shareVal.ToString("N1", $culture) + "%")
         }
     })
@@ -704,7 +708,9 @@ function Get-ClaudeMetricsReport {
             TotalTokens  = $_.TotalTokens
             CostRaw      = [math]::Round($_.Cost, 2)
             CostFmt      = Format-CurrencyValue -Amount $_.Cost -CurrencyCode $Currency -Culture $culture
+            SavingsRaw   = [math]::Round($_.Savings, 2)
             SavingsFmt   = Format-CurrencyValue -Amount $_.Savings -CurrencyCode $Currency -Culture $culture
+            ShareVal     = [math]::Round($shareVal, 1)
             SharePct     = ($shareVal.ToString("N1", $culture) + "%")
         }
     })
@@ -719,22 +725,25 @@ function Get-ClaudeMetricsReport {
         if ($blocks -lt 1 -and $_.TotalTokens -gt 0) { $blocks = 1 }
         $barStr = ("#" * $blocks).PadRight(20, ".")
         [PSCustomObject]@{
-            Date        = $_.Date
-            FxRateFmt   = if ($Currency -eq "USD") { "1.00" } else { $_.FxRate.ToString("N4", $culture) }
-            Turns       = Format-LocaleNumber -Value $_.Messages -Decimals 0 -Culture $culture
-            LinesAddFmt = "+" + (Format-LocaleNumber -Value $_.LinesAdded -Decimals 0 -Culture $culture)
-            LinesRemFmt = "-" + (Format-LocaleNumber -Value $_.LinesRemoved -Decimals 0 -Culture $culture)
-            EditsFmt    = Format-LocaleNumber -Value $_.EditCount -Decimals 0 -Culture $culture
-            ToolsFmt    = Format-LocaleNumber -Value $_.TotalTools -Decimals 0 -Culture $culture
-            InputFmt    = Format-TokenCount $_.InputTokens $culture
-            OutputFmt   = Format-TokenCount $_.OutputTokens $culture
-            CacheFmt    = Format-TokenCount $_.CacheTokens $culture
-            TotalFmt    = Format-TokenCount $_.TotalTokens $culture
-            TotalTokens = $_.TotalTokens
-            CostRaw     = [math]::Round($_.Cost, 2)
-            CostFmt     = Format-CurrencyValue -Amount $_.Cost -CurrencyCode $Currency -Culture $culture
-            SavingsFmt  = Format-CurrencyValue -Amount $_.Savings -CurrencyCode $Currency -Culture $culture
-            TrendBar    = $barStr
+            Date         = $_.Date
+            FxRateFmt    = if ($Currency -eq "USD") { "1.00" } else { $_.FxRate.ToString("N4", $culture) }
+            Turns        = Format-LocaleNumber -Value $_.Messages -Decimals 0 -Culture $culture
+            LinesAddFmt  = "+" + (Format-LocaleNumber -Value $_.LinesAdded -Decimals 0 -Culture $culture)
+            LinesRemFmt  = "-" + (Format-LocaleNumber -Value $_.LinesRemoved -Decimals 0 -Culture $culture)
+            LinesAdded   = $_.LinesAdded
+            LinesRemoved = $_.LinesRemoved
+            EditsFmt     = Format-LocaleNumber -Value $_.EditCount -Decimals 0 -Culture $culture
+            ToolsFmt     = Format-LocaleNumber -Value $_.TotalTools -Decimals 0 -Culture $culture
+            InputFmt     = Format-TokenCount $_.InputTokens $culture
+            OutputFmt    = Format-TokenCount $_.OutputTokens $culture
+            CacheFmt     = Format-TokenCount $_.CacheTokens $culture
+            TotalFmt     = Format-TokenCount $_.TotalTokens $culture
+            TotalTokens  = $_.TotalTokens
+            CostRaw      = [math]::Round($_.Cost, 2)
+            CostFmt      = Format-CurrencyValue -Amount $_.Cost -CurrencyCode $Currency -Culture $culture
+            SavingsRaw   = [math]::Round($_.Savings, 2)
+            SavingsFmt   = Format-CurrencyValue -Amount $_.Savings -CurrencyCode $Currency -Culture $culture
+            TrendBar     = $barStr
         }
     })
 
@@ -776,12 +785,29 @@ function Get-ClaudeMetricsReport {
 
     $otherTools = [Math]::Max(0, $totalTools - ($totalEdits + $totalBash + $totalReadSearch + $totalMcp))
     $byToolList = @(
-        [PSCustomObject]@{ Category = "Code Edits & Writes (Edit / MultiEdit / Write)"; Calls = Format-LocaleNumber -Value $totalEdits -Decimals 0 -Culture $culture; Details = "+$(Format-LocaleNumber -Value $totalLinesAdd -Decimals 0 -Culture $culture) / -$(Format-LocaleNumber -Value $totalLinesRem -Decimals 0 -Culture $culture) lines" },
-        [PSCustomObject]@{ Category = "File Inspection & Search (Read / Grep / Glob)";  Calls = Format-LocaleNumber -Value $totalReadSearch -Decimals 0 -Culture $culture; Details = "Codebase exploration" },
-        [PSCustomObject]@{ Category = "Terminal Execution (Bash)";                      Calls = Format-LocaleNumber -Value $totalBash -Decimals 0 -Culture $culture; Details = "Shell commands" },
-        [PSCustomObject]@{ Category = "MCP Connectors (mcp__*)";                        Calls = Format-LocaleNumber -Value $totalMcp -Decimals 0 -Culture $culture; Details = "External MCP tools" },
-        [PSCustomObject]@{ Category = "Subagents & Other Tools (Agent / Task / Web)";   Calls = Format-LocaleNumber -Value $otherTools -Decimals 0 -Culture $culture; Details = "Subagent spawns & tasks" }
+        [PSCustomObject]@{ Category = "Code Edits & Writes (Edit / MultiEdit / Write)"; Calls = Format-LocaleNumber -Value $totalEdits -Decimals 0 -Culture $culture; RawCalls = $totalEdits; Color = "#10B981"; Details = "+$(Format-LocaleNumber -Value $totalLinesAdd -Decimals 0 -Culture $culture) / -$(Format-LocaleNumber -Value $totalLinesRem -Decimals 0 -Culture $culture) lines" },
+        [PSCustomObject]@{ Category = "File Inspection & Search (Read / Grep / Glob)";  Calls = Format-LocaleNumber -Value $totalReadSearch -Decimals 0 -Culture $culture; RawCalls = $totalReadSearch; Color = "#3B82F6"; Details = "Codebase exploration" },
+        [PSCustomObject]@{ Category = "Terminal Execution (Bash)";                      Calls = Format-LocaleNumber -Value $totalBash -Decimals 0 -Culture $culture; RawCalls = $totalBash; Color = "#F59E0B"; Details = "Shell commands" },
+        [PSCustomObject]@{ Category = "MCP Connectors (mcp__*)";                        Calls = Format-LocaleNumber -Value $totalMcp -Decimals 0 -Culture $culture; RawCalls = $totalMcp; Color = "#8B5CF6"; Details = "External MCP tools" },
+        [PSCustomObject]@{ Category = "Subagents & Other Tools (Agent / Task / Web)";   Calls = Format-LocaleNumber -Value $otherTools -Decimals 0 -Culture $culture; RawCalls = $otherTools; Color = "#EC4899"; Details = "Subagent spawns & tasks" }
     )
+
+    # Derived Efficiency & Analytical Insights
+    $avgCostPerTurn = if ($totalMsgs -gt 0) { $totalCostConv / $totalMsgs } else { 0.0 }
+    $costPer1kLoc = if ($totalLinesAdd -gt 0) { ($totalCostConv * 1000.0) / $totalLinesAdd } else { 0.0 }
+    $cacheDiscountVal = if ($totalUncachedConv -gt 0) { ($totalSavingsConv * 100.0) / $totalUncachedConv } else { 0.0 }
+    $avgTokPerTurn = if ($totalMsgs -gt 0) { [int64]($totalTok / $totalMsgs) } else { [int64]0 }
+    $netLines = $totalLinesAdd - $totalLinesRem
+
+    $toolDenom = [Math]::Max(1, $totalTools)
+    $readPct = [math]::Round(($totalReadSearch * 100.0) / $toolDenom, 1)
+    $editPct = [math]::Round(($totalEdits * 100.0) / $toolDenom, 1)
+    $bashPct = [math]::Round(($totalBash * 100.0) / $toolDenom, 1)
+    $mcpOtherPct = [Math]::Max(0.0, [math]::Round(100.0 - ($readPct + $editPct + $bashPct), 1))
+
+    $peakDayObj = $byDayList | Sort-Object CostRaw -Descending | Select-Object -First 1
+    $topProjObj = $byProjectList | Select-Object -First 1
+    $topModObj  = $byModelList | Select-Object -First 1
 
     return [PSCustomObject]@{
         Summary = [PSCustomObject]@{
@@ -808,10 +834,15 @@ function Get-ClaudeMetricsReport {
             LinesAddedFmt      = "+" + (Format-LocaleNumber -Value $totalLinesAdd -Decimals 0 -Culture $culture)
             LinesRemoved       = $totalLinesRem
             LinesRemovedFmt    = "-" + (Format-LocaleNumber -Value $totalLinesRem -Decimals 0 -Culture $culture)
+            NetLinesFmt        = (if ($netLines -ge 0) { "+" } else { "" }) + (Format-LocaleNumber -Value $netLines -Decimals 0 -Culture $culture)
             EditCount          = $totalEdits
             EditCountFmt       = Format-LocaleNumber -Value $totalEdits -Decimals 0 -Culture $culture
             BashCount          = $totalBash
             BashCountFmt       = Format-LocaleNumber -Value $totalBash -Decimals 0 -Culture $culture
+            ReadSearchCount    = $totalReadSearch
+            ReadSearchFmt      = Format-LocaleNumber -Value $totalReadSearch -Decimals 0 -Culture $culture
+            McpCount           = $totalMcp
+            McpCountFmt        = Format-LocaleNumber -Value $totalMcp -Decimals 0 -Culture $culture
             TotalToolCalls     = $totalTools
             TotalToolCallsFmt  = Format-LocaleNumber -Value $totalTools -Decimals 0 -Culture $culture
             TotalCostUSD       = [math]::Round($totalCostConv, 2)
@@ -821,6 +852,21 @@ function Get-ClaudeMetricsReport {
             CacheSavingsUSD    = [math]::Round($totalSavingsConv, 2)
             CacheSavingsFmt    = Format-CurrencyValue -Amount $totalSavingsConv -CurrencyCode $Currency -Culture $culture
             CacheHitRatePct    = $cacheHitPctStr
+            CacheDiscountPct   = ($cacheDiscountVal.ToString("N1", $culture) + "%")
+            AvgCostPerTurnFmt  = Format-CurrencyValue -Amount $avgCostPerTurn -CurrencyCode $Currency -Culture $culture
+            CostPer1kLocFmt    = Format-CurrencyValue -Amount $costPer1kLoc -CurrencyCode $Currency -Culture $culture
+            AvgTokensPerTurnFmt= Format-TokenCount $avgTokPerTurn $culture
+            ReadPct            = $readPct
+            EditPct            = $editPct
+            BashPct            = $bashPct
+            McpOtherPct        = $mcpOtherPct
+            ReadPctFmt         = ($readPct.ToString("N1", $culture) + "%")
+            EditPctFmt         = ($editPct.ToString("N1", $culture) + "%")
+            BashPctFmt         = ($bashPct.ToString("N1", $culture) + "%")
+            McpOtherPctFmt     = ($mcpOtherPct.ToString("N1", $culture) + "%")
+            PeakDayLabel       = if ($peakDayObj) { "$($peakDayObj.Date) ($($peakDayObj.CostFmt))" } else { "—" }
+            TopProjectLabel    = if ($topProjObj) { "$($topProjObj.ProjectName) ($($topProjObj.SharePct))" } else { "—" }
+            TopModelLabel      = if ($topModObj)  { "$($topModObj.Model) ($($topModObj.SharePct))" } else { "—" }
             MinDate            = $minDate
             MaxDate            = $maxDate
         }
@@ -854,35 +900,92 @@ function Export-ClaudeMetricsReport {
     $s = $Report.Summary
     $sb = New-Object System.Text.StringBuilder
 
+    # Build SVG Daily Chart (up to last 30 chronological days)
+    $chronDays = @($Report.ByDay | Select-Object -First 30)
+    [array]::Reverse($chronDays)
+    $maxDayVal = 0.01
+    foreach ($cd in $chronDays) {
+        if ($cd.CostRaw -gt $maxDayVal) { $maxDayVal = $cd.CostRaw }
+        if ($cd.SavingsRaw -gt $maxDayVal) { $maxDayVal = $cd.SavingsRaw }
+    }
+
+    $svgDailyBars = New-Object System.Text.StringBuilder
+    $dayCount = [Math]::Max(1, $chronDays.Count)
+    $slotW = [Math]::Max(24.0, [Math]::Floor(860.0 / $dayCount))
+    $barW = [Math]::Max(7.0, [Math]::Floor(($slotW - 8.0) / 2.0))
+    $chartH = 160.0
+
+    for ($i = 0; $i -lt $chronDays.Count; $i++) {
+        $d = $chronDays[$i]
+        $xBase = 40 + ($i * $slotW)
+        $hCost = [Math]::Max(2.0, [Math]::Round(($d.CostRaw / $maxDayVal) * $chartH))
+        $hSave = [Math]::Max(2.0, [Math]::Round(($d.SavingsRaw / $maxDayVal) * $chartH))
+        $yCost = 180 - $hCost
+        $ySave = 180 - $hSave
+        $shortDate = if ($d.Date.Length -ge 10) { $d.Date.Substring(5) } else { $d.Date }
+        $tip = "$($d.Date) | Cost: $($d.CostFmt) | Saved: $($d.SavingsFmt) | Code: $($d.LinesAddFmt)/$($d.LinesRemFmt)"
+
+        [void]$svgDailyBars.AppendLine("<g><title>$([System.Web.HttpUtility]::HtmlEncode($tip))</title>")
+        [void]$svgDailyBars.AppendLine("<rect x='$xBase' y='$yCost' width='$barW' height='$hCost' rx='2' fill='#d97757'/>")
+        [void]$svgDailyBars.AppendLine("<rect x='$($xBase + $barW + 2)' y='$ySave' width='$barW' height='$hSave' rx='2' fill='#10b981'/>")
+        if ($chronDays.Count -le 20 -or ($i % 2 -eq 0)) {
+            [void]$svgDailyBars.AppendLine("<text x='$($xBase + $barW)' y='198' fill='#71717a' font-size='10' text-anchor='middle'>$shortDate</text>")
+        }
+        [void]$svgDailyBars.AppendLine("</g>")
+    }
+
+    # Build SVG Donut Chart for Model Share
+    $donutColors = @("#d97757", "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4")
+    $svgDonutSegments = New-Object System.Text.StringBuilder
+    $svgDonutLegend = New-Object System.Text.StringBuilder
+    $circumference = 2.0 * [Math]::PI * 54.0
+    $offsetAcc = 0.0
+    $mIdx = 0
+    foreach ($m in ($Report.ByModel | Select-Object -First 6)) {
+        $col = $donutColors[$mIdx % $donutColors.Count]
+        $pct = [Math]::Max(0.0, [double]$m.ShareVal)
+        $segLen = ($pct / 100.0) * $circumference
+        $dashVal = ("{0:F2} {1:F2}" -f $segLen, $circumference).Replace(',', '.')
+        $offVal = ("-{0:F2}" -f $offsetAcc).Replace(',', '.')
+        [void]$svgDonutSegments.AppendLine("<circle cx='80' cy='80' r='54' fill='transparent' stroke='$col' stroke-width='22' stroke-dasharray='$dashVal' stroke-dashoffset='$offVal'><title>$([System.Web.HttpUtility]::HtmlEncode($m.Model)): $($m.CostFmt) ($($m.SharePct))</title></circle>")
+        $legY = 24 + ($mIdx * 24)
+        [void]$svgDonutLegend.AppendLine("<rect x='175' y='$($legY - 10)' width='12' height='12' rx='3' fill='$col'/><text x='194' y='$legY' fill='#e4e4e7' font-size='12'>$([System.Web.HttpUtility]::HtmlEncode($m.Model)) — $($m.SharePct) ($($m.CostFmt))</text>")
+        $offsetAcc += $segLen
+        $mIdx++
+    }
+
     [void]$sb.AppendLine(@"
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Claude Instance Manager — FinOps &amp; Code Telemetry Report ($($s.Currency))</title>
+<title>Claude Instance Manager — FinOps &amp; Engineering Analytics ($($s.Currency))</title>
 <style>
-  body { background: #0f0f12; color: #f4f4f5; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 28px; }
-  .wrap { max-width: 1180px; margin: 0 auto; }
-  .header { background: #18181b; border: 1px solid #27272a; border-left: 4px solid #d97757; border-radius: 10px; padding: 18px 24px; margin-bottom: 20px; }
-  .header h1 { margin: 0 0 6px 0; font-size: 22px; }
-  .sub { color: #a1a1aa; font-size: 13px; }
-  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
-  .kpi { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 14px; }
+  body { background: #0f0f12; color: #f4f4f5; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 26px; }
+  .wrap { max-width: 1200px; margin: 0 auto; }
+  .header { background: #18181b; border: 1px solid #27272a; border-left: 4px solid #d97757; border-radius: 10px; padding: 16px 22px; margin-bottom: 18px; }
+  .header h1 { margin: 0 0 4px 0; font-size: 20px; }
+  .sub { color: #a1a1aa; font-size: 12px; }
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+  .insights { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+  .charts-grid { display: grid; grid-template-columns: 1.45fr 1fr; gap: 16px; margin-bottom: 18px; }
+  .kpi { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 13px; }
   .kpi .lbl { color: #a1a1aa; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .kpi .val { font-size: 21px; font-weight: 700; margin: 6px 0 4px 0; }
+  .kpi .val { font-size: 20px; font-weight: 700; margin: 5px 0 3px 0; }
   .kpi .hint { color: #71717a; font-size: 11px; }
-  .section { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 18px 22px; margin-bottom: 20px; }
-  .section h2 { margin: 0 0 14px 0; font-size: 16px; color: #e4e4e7; }
+  .section { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 16px 20px; margin-bottom: 18px; }
+  .section h2 { margin: 0 0 12px 0; font-size: 15px; color: #e4e4e7; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
   th, td { text-align: left; padding: 8px 9px; border-bottom: 1px solid #27272a; }
   th { color: #a1a1aa; font-weight: 600; background: #121215; }
   .right { text-align: right; }
+  .stack-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: #27272a; margin: 8px 0; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="header">
-    <h1>Claude Code &amp; Desktop — Token FinOps &amp; Engineering Report ($($s.Currency))</h1>
+    <h1>Claude Code &amp; Desktop — FinOps &amp; Engineering Analytics ($($s.Currency))</h1>
     <div class="sub">Generated by Claude Instance Manager (CIM) on $(Get-Date -Format 'dd/MM/yyyy HH:mm') &nbsp;|&nbsp; FX Source: $($s.FxSource)</div>
   </div>
   <div class="kpis">
@@ -894,22 +997,68 @@ function Export-ClaudeMetricsReport {
     <div class="kpi">
       <div class="lbl">Cache Savings</div>
       <div class="val" style="color:#10b981;">$($s.CacheSavingsFmt)</div>
-      <div class="hint">Hit Rate: $($s.CacheHitRatePct)</div>
+      <div class="hint">Hit: $($s.CacheHitRatePct) | Discount: $($s.CacheDiscountPct)</div>
     </div>
     <div class="kpi">
       <div class="lbl">Tokens</div>
       <div class="val" style="color:#60a5fa;">$($s.TotalTokensFmt)</div>
-      <div class="hint">Out: $($s.OutputTokensFmt) | Cache: $($s.CacheReadFmt)</div>
+      <div class="hint">Out: $($s.OutputTokensFmt) | Avg/Turn: $($s.AvgTokensPerTurnFmt)</div>
     </div>
     <div class="kpi">
       <div class="lbl">Code Changes</div>
       <div class="val" style="color:#34d399;">$($s.LinesAddedFmt) / $($s.LinesRemovedFmt)</div>
-      <div class="hint">Edits: $($s.EditCountFmt) | Bash: $($s.BashCountFmt)</div>
+      <div class="hint">Net: $($s.NetLinesFmt) | Edits: $($s.EditCountFmt)</div>
     </div>
     <div class="kpi">
       <div class="lbl">Turns &amp; Tools</div>
       <div class="val" style="color:#f4f4f5;">$($s.TotalMessagesFmt)</div>
       <div class="hint">Tools: $($s.TotalToolCallsFmt) | Subagents: $($s.SubagentMessagesFmt)</div>
+    </div>
+  </div>
+
+  <div class="insights">
+    <div class="kpi">
+      <div class="lbl">Cost Efficiency</div>
+      <div class="val" style="font-size:16px;color:#f4f4f5;">$($s.AvgCostPerTurnFmt) / turn</div>
+      <div class="hint">Per 1K Lines Added: $($s.CostPer1kLocFmt)</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">Peak Day</div>
+      <div class="val" style="font-size:15px;color:#f59e0b;">$($s.PeakDayLabel)</div>
+      <div class="hint">Highest daily consumption</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">Top Project</div>
+      <div class="val" style="font-size:15px;color:#60a5fa;">$([System.Web.HttpUtility]::HtmlEncode($s.TopProjectLabel))</div>
+      <div class="hint">DominantModel: $([System.Web.HttpUtility]::HtmlEncode($s.TopModelLabel))</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">Agent Action Profile</div>
+      <div class="stack-bar">
+        <div style="width:$($s.ReadPct.ToString('F1',[System.Globalization.CultureInfo]::InvariantCulture))%;background:#3b82f6;" title="Read/Search: $($s.ReadPctFmt)"></div>
+        <div style="width:$($s.EditPct.ToString('F1',[System.Globalization.CultureInfo]::InvariantCulture))%;background:#10b981;" title="Edit/Write: $($s.EditPctFmt)"></div>
+        <div style="width:$($s.BashPct.ToString('F1',[System.Globalization.CultureInfo]::InvariantCulture))%;background:#f59e0b;" title="Bash: $($s.BashPctFmt)"></div>
+        <div style="width:$($s.McpOtherPct.ToString('F1',[System.Globalization.CultureInfo]::InvariantCulture))%;background:#8b5cf6;" title="MCP/Other: $($s.McpOtherPctFmt)"></div>
+      </div>
+      <div class="hint">Read $($s.ReadPctFmt) | Edit $($s.EditPctFmt) | Bash $($s.BashPctFmt) | MCP $($s.McpOtherPctFmt)</div>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="section" style="margin-bottom:0;">
+      <h2>Daily Cost (Terracotta) vs. Prompt Cache Savings (Green)</h2>
+      <svg viewBox="0 0 920 210" width="100%" height="200">
+        <line x1="35" y1="180" x2="900" y2="180" stroke="#27272a" stroke-width="1"/>
+        $($svgDailyBars.ToString())
+      </svg>
+    </div>
+    <div class="section" style="margin-bottom:0;">
+      <h2>Cost Distribution by Model</h2>
+      <svg viewBox="0 0 460 175" width="100%" height="175">
+        $($svgDonutSegments.ToString())
+        <circle cx="80" cy="80" r="34" fill="#18181b"/>
+        $($svgDonutLegend.ToString())
+      </svg>
     </div>
   </div>
 "@)

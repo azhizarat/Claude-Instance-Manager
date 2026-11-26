@@ -2,7 +2,7 @@
 
 Add-Type -AssemblyName System.Drawing
 
-$script:CIMVersion = "1.3.0"
+$script:CIMVersion = "1.4.0"
 $script:CIMRootDir = Join-Path $env:LOCALAPPDATA "Claude-Instances"
 $script:CIMStateFile = Join-Path $script:CIMRootDir "cim-state.json"
 $script:CIMIconsDir = Join-Path $script:CIMRootDir "icons"

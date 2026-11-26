@@ -143,7 +143,7 @@ Assert-True (Test-Path $coreUpdaterPath) "Task 5b: src/Core-AutoUpdater.ps1 exis
 if (Test-Path $coreUpdaterPath) {
     . $coreUpdaterPath
     $ver = Get-CIMCurrentVersion
-    Assert-True ($ver -eq "1.3.0") "Task 5b: Get-CIMCurrentVersion returns 1.3.0"
+    Assert-True ($ver -eq "1.4.0") "Task 5b: Get-CIMCurrentVersion returns 1.4.0"
 }
 
 # --- Task 6: Main WPF GUI XAML Check ---
